@@ -1,0 +1,14 @@
+{
+  "name": "mybrowser",
+  "version": "0.1.0",
+  "description": "My own hardened Chromium-based web browser",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "bogamie",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^42.0.0"
+  }
+}

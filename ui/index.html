@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src data: https: http:;" />
+  <title>MyBrowser</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Top chrome: tab row (with window controls) + toolbar + bookmark bar. -->
+  <div id="bar">
+    <!-- Row 1: hamburger + tabs + new-tab + window controls (frameless). -->
+    <div id="tabsrow">
+      <button class="nav" id="menu" title="Menu" data-i18n-title="win_menu">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg>
+      </button>
+      <div id="tabstrip"></div>
+      <button class="nav" id="newtab" title="New tab (Ctrl+T)" data-i18n-title="win_newtab">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg>
+      </button>
+      <div id="wincontrols">
+        <button class="wc" id="win-min" title="Minimize" data-i18n-title="win_min">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10"/></svg>
+        </button>
+        <button class="wc" id="win-max" title="Maximize" data-i18n-title="win_max">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="10" height="10" rx="1.5"/></svg>
+        </button>
+        <button class="wc close" id="win-close" title="Close" data-i18n-title="win_close">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Row 2: navigation + address + actions. -->
+    <div id="toolbar">
+      <button class="nav" id="back" title="Back (Alt+←)" data-i18n-title="nav_back">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4l-4 4 4 4"/></svg>
+      </button>
+      <button class="nav" id="forward" title="Forward (Alt+→)" data-i18n-title="nav_forward">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l4 4-4 4"/></svg>
+      </button>
+      <button class="nav" id="reload" title="Reload (Ctrl+R)" data-i18n-title="nav_reload">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.5 8a4.5 4.5 0 1 1-1.3-3.2"/><path d="M12.5 2.5v3h-3"/></svg>
+      </button>
+
+      <div id="omnibox">
+        <span id="lock" title="Connection security" data-i18n-title="lock_title">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7.2" width="9" height="6" rx="1.2"/><path d="M5.5 7.2V5.3a2.5 2.5 0 0 1 5 0v1.9"/></svg>
+        </span>
+        <input id="address" type="text" spellcheck="false"
+               placeholder="Search or enter address (Ctrl+L)" data-i18n-ph="url_placeholder" />
+        <button id="star" title="Bookmark (Ctrl+D)" data-i18n-title="star_title">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M8 1.7l1.9 3.96 4.35.63-3.15 3.07.74 4.32L8 11.65 4.31 13.75l.74-4.32L1.9 6.36l4.35-.63z"/></svg>
+        </button>
+      </div>
+
+      <button class="nav" id="shield" title="Block ads/trackers" data-i18n-title="shield_title">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M8 1.6l5.2 2.1v3.7c0 3.3-2.2 5.8-5.2 7-3-1.2-5.2-3.7-5.2-7V3.7z"/></svg>
+        <span id="shieldcount">0</span>
+      </button>
+    </div>
+
+    <div id="bookmarkbar"></div>
+
+    <div id="findbar" hidden>
+      <input id="findinput" type="text" placeholder="Find in page" data-i18n-ph="find_placeholder" spellcheck="false" />
+      <span id="findcount">0/0</span>
+      <button class="mini" id="findprev" title="Previous" data-i18n-title="find_prev">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12.5V4M4.5 7.5L8 3.8l3.5 3.7"/></svg>
+      </button>
+      <button class="mini" id="findnext" title="Next" data-i18n-title="find_next">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3.5V12M4.5 8.5L8 12.2l3.5-3.7"/></svg>
+      </button>
+      <button class="mini" id="findclose" title="Close" data-i18n-title="find_close">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
+    </div>
+
+    <div id="saveprompt" hidden>
+      <span id="savetext" data-i18n="save_default">Save the password for this site?</span>
+      <button class="mini primary" id="savaccept" data-i18n="save_accept">Save</button>
+      <button class="mini" id="savreject" data-i18n="save_reject">No</button>
+    </div>
+  </div>
+
+  <!-- Floating menu -->
+  <div id="menupop" hidden></div>
+
+  <!-- Bookmark add/edit popup (Chrome-style: name + folder + new folder) -->
+  <div id="bmedit" hidden>
+    <div class="bmedit-head" data-i18n="bmedit_head">Bookmark added</div>
+    <input id="bmedit-name" type="text" spellcheck="false" placeholder="Name" data-i18n-ph="name_placeholder" />
+    <select id="bmedit-folder"></select>
+    <div class="bmedit-actions">
+      <button class="mini ghost" id="bmedit-remove" data-i18n="bmedit_remove">Remove</button>
+      <button class="mini primary" id="bmedit-done" data-i18n="bmedit_done">Done</button>
+    </div>
+  </div>
+
+  <!-- Folder picker dialog: choose a destination folder, optionally make a new
+       one under it (Chrome-style). Modal — closes only via Cancel/Save. -->
+  <div id="bmtree" hidden>
+    <div class="bmtree-head" data-i18n="dialog_editBookmark">Edit bookmark</div>
+    <input id="bmtree-name" type="text" spellcheck="false" placeholder="Name" data-i18n-ph="name_placeholder" />
+    <div id="bmtree-list"></div>
+    <div class="bmtree-actions">
+      <button class="mini ghost" id="bmtree-newfolder" data-i18n="bmtree_newfolder">New folder</button>
+      <span class="right">
+        <button class="mini ghost" id="bmtree-cancel" data-i18n="bmtree_cancel">Cancel</button>
+        <button class="mini primary" id="bmtree-save" data-i18n="bmtree_save">Save</button>
+      </span>
+    </div>
+  </div>
+
+  <!-- Bookmark-bar folder dropdown (navigates into nested folders in place) -->
+  <div id="bmfolderpop" hidden></div>
+
+  <!-- Right-click context menu for bookmark-bar items -->
+  <div id="bmctx" hidden></div>
+
+  <!-- Full-window overlay panels (history / downloads / passwords; settings is a tab) -->
+  <div id="panel" hidden>
+    <div id="panelhead">
+      <span id="paneltitle"></span>
+      <button class="mini" id="panelclose" title="Close" data-i18n-title="panel_close">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
+    </div>
+    <div id="panelbody"></div>
+  </div>
+
+  <!-- Security interstitial (cert error / failed https upgrade) -->
+  <div id="interstitial" hidden>
+    <div class="sheet">
+      <div class="warnicon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3L22.5 20.5h-21z"/><path d="M12 9.5v5"/><path d="M12 17.5h.01"/></svg>
+      </div>
+      <h1 id="intertitle" data-i18n="inter_certTitle">Your connection is not private</h1>
+      <p id="intertext"></p>
+      <div class="row">
+        <button class="mini" id="interback" data-i18n="inter_back">Back to safety</button>
+        <button class="mini danger" id="interproceed" data-i18n="inter_proceed">Proceed at your own risk</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Classic scripts sharing one global scope; load order matters (each builds
+       on the globals defined before it). dom.js must come first after i18n.js. -->
+  <script src="i18n.js"></script>
+  <script src="overlayScrollbar.js"></script>
+  <script src="dom.js"></script>
+  <script src="tabs.js"></script>
+  <script src="bookmarks.js"></script>
+  <script src="panels.js"></script>
+  <script src="chrome.js"></script>
+</body>
+</html>

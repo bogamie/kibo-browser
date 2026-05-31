@@ -1,0 +1,578 @@
+:root {
+  /* Minimal neutral dark — true grays, no purple cast, one restrained accent. */
+  --bg: #1c1c1e;        /* chrome */
+  --bg2: #262628;       /* surfaces: omnibox, tabs, buttons */
+  --bg3: #0d0d0e;       /* hairline borders / deepest */
+  --fg: #e8e8ea;
+  --muted: #8c8c92;
+  --accent: #5e84c2;    /* muted steel blue, used sparingly */
+  --active: #323236;    /* hover / active surface */
+  --green: #7cc08a;
+  --red: #d9697a;
+  --yellow: #cfae6a;
+  --surface: #1c1c1e;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  /* chrome window never scrolls; prevents a transient scrollbar flashing at the
+     top when the bar grows/shrinks (e.g. bookmark bar appearing) before the
+     native content view repositions */
+  overflow: hidden;
+  /* transparent so the floating bar can sit over page content in auto-hide */
+  background: transparent;
+  color: var(--fg);
+  font: 13px/1.4 system-ui, "Noto Sans KR", sans-serif;
+  user-select: none;
+}
+body.incognito { --accent: #7d8590; }
+
+/* ---- icon sizing: one size per context (single source of truth) ----------*/
+.nav svg, #lock svg, #star svg { width: 16px; height: 16px; }
+.wc svg { width: 12px; height: 12px; }
+.mini svg, .list-item button svg { width: 15px; height: 15px; }
+.tab .close svg { width: 12px; height: 12px; }
+.bm .fico svg { width: 14px; height: 14px; }
+#bmfolderpop .menuitem .ico svg { width: 15px; height: 15px; }
+.tab .dot svg { width: 11px; height: 11px; }
+#interstitial .warnicon svg { width: 56px; height: 56px; }
+
+/* ---- top bar -------------------------------------------------------------*/
+#bar {
+  position: relative;        /* containing block for the floating find bar */
+  background: #131313;
+  border-bottom: 1px solid var(--bg3);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .25);
+  /* Auto-hide slide runs on the GPU compositor thread (transform only). */
+  will-change: transform;
+  transition: transform .18s cubic-bezier(.22, .61, .36, 1);
+}
+#bar.hidden { transform: translateY(-100%); }
+
+/* Frameless window: the chrome itself is the drag handle; interactive
+   elements opt out so clicks/typing still work. */
+#tabsrow, #toolbar { -webkit-app-region: drag; }
+button, input, select, #omnibox, .tab, .bm, #menupop, #bmedit, #bmtree,
+#bmfolderpop, #bmctx, #panel, #interstitial, #findbar, #saveprompt { -webkit-app-region: no-drag; }
+/* During a bookmark drag, drop the window-move regions so the compositor's
+   window-drag doesn't fight the HTML5 drag (which stuttered it over the tab/tool rows). */
+body.bm-dragging #tabsrow, body.bm-dragging #toolbar { -webkit-app-region: no-drag; }
+/* While a transient popup (menu / folder dropdown / context menu / bookmark
+   bubble) is open, the window-move regions would swallow the click that should
+   dismiss it (the OS starts a window drag instead of dispatching a click), so
+   drop them to no-drag so the outside-click handlers can fire. */
+body.popup-open #tabsrow, body.popup-open #toolbar { -webkit-app-region: no-drag; }
+
+/* Row 1: hamburger + tab strip + new-tab + window controls */
+#tabsrow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 40px;
+  padding: 6px 6px 0;
+}
+
+#wincontrols { display: flex; gap: 2px; margin-left: 4px; }
+.wc {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 30px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .12s;
+}
+.wc:hover { background: var(--active); }
+.wc.close:hover { background: var(--red); color: #11111b; }
+
+#toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  height: 48px;
+}
+
+.nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  line-height: 1;
+  height: 32px;
+  min-width: 32px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg);
+  font-size: 16px;
+  cursor: pointer;
+  transition: background .12s;
+}
+.nav:hover { background: var(--active); }
+.nav:disabled { color: var(--muted); cursor: default; background: transparent; }
+#shieldcount { font-size: 11px; color: var(--green); }
+#shield.off { opacity: .45; }
+#shield.off #shieldcount { color: var(--muted); }
+
+#omnibox {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 6px 0 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--bg2);
+}
+#omnibox:focus-within { border-color: var(--accent); }
+#lock { display: inline-flex; align-items: center; color: var(--muted); margin-right: 6px; }
+#lock.insecure { color: var(--yellow); }
+#address {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  font-size: 13px;
+  outline: none;
+}
+#star {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+#star.on { color: var(--yellow); }
+
+/* ---- bookmark bar --------------------------------------------------------*/
+#bookmarkbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+#bookmarkbar:empty { display: none; }
+#bookmarkbar::-webkit-scrollbar { display: none; }
+/* Flat: favicon + name, no box. A subtle hover tint is the only chrome. */
+.bm {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 150px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: transparent;
+  white-space: nowrap;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--fg);
+}
+.bm:hover { background: var(--active); }
+.bm .lbl { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.bm .favicon { width: 14px; height: 14px; object-fit: contain; flex: none; border-radius: 3px; }
+/* drag & drop */
+.bm.dragging { opacity: .4; }
+.bm.drop-into { background: color-mix(in srgb, var(--fg) 10%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--fg) 45%, transparent); color: var(--fg); }
+/* Floating drag preview: a real DOM node (not setDragImage, which Wayland
+   renders opaque) so the icon+label float background-less, shrunk, by the cursor. */
+.bm.drag-float {
+  position: fixed; left: 0; top: 0;
+  background: transparent;
+  pointer-events: none;
+  opacity: .85;
+  z-index: 9999;
+  font-size: 9px;
+}
+.bm.drag-float .favicon { width: 10px; height: 10px; }
+.bm.drag-float .fico svg { width: 10px; height: 10px; }
+/* Reorder indicator. Fixed-position overlay (not inserted into the flex flow) so
+   it never reflows the bar — the surrounding chips stay perfectly still. top/
+   height are set inline from the bar's measured geometry. */
+.bm-drop-line { position: fixed; width: 2px; background: color-mix(in srgb, var(--fg) 55%, transparent); border-radius: 1px; pointer-events: none; z-index: 50; }
+.bm-dd-drop-line { position: fixed; height: 2px; background: color-mix(in srgb, var(--fg) 55%, transparent); border-radius: 1px; pointer-events: none; z-index: 30; }
+/* Dropping a bookmark onto the tab strip: a tab being replaced is tinted +
+   ringed; an insert position shows the same vertical line as the bookmark bar. */
+.tab.drop-target { background: color-mix(in srgb, var(--fg) 10%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--fg) 45%, transparent); }
+.tab-drop-line { position: fixed; width: 2px; background: color-mix(in srgb, var(--fg) 55%, transparent); border-radius: 1px; pointer-events: none; z-index: 50; }
+
+/* ---- find bar & save prompt ---------------------------------------------*/
+#findbar, #saveprompt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 12px;
+  border-top: 1px solid var(--bg3);
+  background: var(--bg2);
+}
+/* The find bar floats just below the bar, OVER the page top — it's taken out of
+   the bar's flow so opening/closing it never changes the bar height (and so never
+   nudges the content view). The chrome view is grown to cover it (see dom.js). */
+#findbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+}
+/* Drop-in / fade on open & close. While `.closing` the bar is still !hidden, so the
+   chrome view stays grown (dom.js) and the fade-out isn't clipped; chrome.js shrinks
+   the view only once animationend fires. transform/opacity don't touch layout, so
+   the content view never moves. */
+#findbar:not([hidden]):not(.closing) { animation: findbar-in .16s cubic-bezier(.22, .61, .36, 1); }
+#findbar.closing { animation: findbar-out .14s ease-in; }
+@keyframes findbar-in  { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes findbar-out { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-6px); } }
+#findbar[hidden], #saveprompt[hidden] { display: none; }
+#findinput {
+  flex: 1;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--active);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  outline: none;
+}
+#findcount { color: var(--muted); font-size: 12px; min-width: 40px; }
+#saveprompt #savetext { flex: 1; }
+
+.mini {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 6px;
+  background: var(--active);
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 13px;
+}
+.mini:hover { filter: brightness(1.2); }
+.mini.primary { background: var(--accent); color: #11111b; }
+.mini.danger { background: var(--red); color: #11111b; }
+.mini.ghost { background: transparent; color: var(--muted); padding: 0 6px; }
+.mini.ghost:hover { filter: none; color: var(--red); }
+
+/* ---- tab strip -----------------------------------------------------------*/
+#tabstrip {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  height: 34px;
+  overflow-x: auto;
+  min-width: 0;
+}
+#tabstrip::-webkit-scrollbar { height: 0; }
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 0;
+  min-width: 40px;
+  max-width: 220px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .12s;
+}
+.tab:hover { background: var(--bg2); }
+.tab.active, .tab.active:hover { background: var(--active); }
+.tab .dot { display: inline-flex; align-items: center; color: var(--green); }
+.tab .favicon { width: 10px; height: 10px; object-fit: contain; flex: none; }
+.tab .dot.insecure { color: var(--yellow); }
+.tab .dot.loading { color: var(--muted); }
+.tab .dot.loading svg { animation: spin .8s linear infinite; transform-origin: center; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.tab .title { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.tab .close {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: none; border: none; background: transparent; color: var(--muted);
+  cursor: pointer; border-radius: 4px; padding: 2px;
+  opacity: 0; pointer-events: none; transition: opacity .12s, background .12s, color .12s;
+}
+.tab .close svg { flex: none; }
+/* Reveal the close button only while hovering the tab (active tab included). */
+.tab:hover .close { opacity: 1; pointer-events: auto; }
+.tab .close:hover { background: var(--active); color: var(--fg); }
+
+/* ---- floating menu -------------------------------------------------------*/
+#menupop {
+  position: fixed;
+  top: 50px; left: 6px;
+  width: max-content; min-width: 220px;   /* grow to fit so labels never wrap */
+  background: var(--bg2);
+  border: 1px solid var(--active);
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
+  z-index: 20;
+}
+#menupop[hidden] { display: none; }
+.menuitem {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 8px 10px;
+  border: none; background: transparent; color: var(--fg);
+  text-align: left; border-radius: 6px; cursor: pointer; font-size: 13px;
+}
+/* App menu rows have fixed short labels — keep them on one line (the menu grows
+   to fit). Not applied to the folder dropdown, whose items are user titles. */
+#menupop .menuitem { white-space: nowrap; }
+#menupop .menuitem .k { padding-left: 24px; }
+.menuitem:hover { background: var(--active); }
+.menuitem:disabled { color: var(--muted); cursor: default; }
+.menuitem:disabled:hover { background: transparent; }
+.menuitem .k { margin-left: auto; color: var(--muted); font-size: 11px; }
+.menusep { height: 1px; background: var(--active); margin: 6px 4px; }
+
+/* ---- bookmark add/edit popup (minimal) ----------------------------------*/
+#bmedit {
+  position: fixed;
+  top: 84px; right: 8px;
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg2);
+  border: 1px solid var(--bg3);
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+  z-index: 25;
+}
+#bmedit[hidden] { display: none; }
+.bmedit-head { font-size: 12px; color: var(--muted); }
+#bmedit input, #bmedit select {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--bg3);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  outline: none;
+  font: inherit;
+}
+#bmedit input:focus, #bmedit select:focus { border-color: var(--accent); }
+#bmedit-newrow { display: flex; gap: 6px; }
+#bmedit-newrow[hidden] { display: none; }
+#bmedit-newrow input { flex: 1; }
+.bmedit-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 2px; }
+
+/* ---- new-folder dialog (tree picker, Chrome-style) ----------------------*/
+#bmtree {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg2);
+  border: 1px solid var(--bg3);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, .55);
+  z-index: 30;
+}
+#bmtree[hidden] { display: none; }
+.bmtree-head { font-size: 14px; font-weight: 600; }
+#bmtree-name {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--bg3);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  outline: none;
+  font: inherit;
+}
+#bmtree-name:focus { border-color: var(--accent); }
+#bmtree-list {
+  height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--bg3);
+  border-radius: 8px;
+  padding: 4px;
+  background: var(--bg);
+}
+.treerow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+}
+.treerow:hover { background: var(--active); }
+.treerow.sel { background: var(--accent); color: #11111b; }
+.treerow .ico { display: inline-flex; flex: none; }
+.treerow .ico svg { width: 15px; height: 15px; }
+.treerow .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* trash stays hidden until the row is hovered, keeping the tree clean */
+.treerow .del { display: none; flex: none; align-items: center; color: var(--muted); }
+.treerow:hover .del { display: inline-flex; }
+.treerow .del:hover { color: var(--red); }
+.treerow .del svg { width: 14px; height: 14px; }
+.treerow.sel .del { color: #11111b; }
+.treerow.pending input {
+  flex: 1; min-width: 0; height: 22px;
+  border: 1px solid #11111b; border-radius: 4px;
+  padding: 0 6px; font: inherit; color: #11111b; background: #fff; outline: none;
+}
+.bmtree-actions { display: flex; align-items: center; gap: 8px; }
+.bmtree-actions .right { display: flex; gap: 8px; margin-left: auto; }
+#bmtree-newfolder[hidden] { display: none; }
+
+/* ---- bookmark-bar folder dropdown ---------------------------------------*/
+#bmfolderpop {
+  position: fixed;
+  min-width: 200px;
+  max-width: 300px;
+  background: var(--bg2);
+  border: 1px solid var(--active);
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
+  z-index: 24;
+}
+#bmfolderpop[hidden] { display: none; }
+/* Smooth open: fade + slide in (plays whenever it becomes visible — spring-load
+   or click; nested-folder navigation re-renders in place, so it doesn't replay). */
+#bmfolderpop:not([hidden]):not(.closing) { animation: bmpop-in .13s ease-out; }
+#bmfolderpop.closing { animation: bmpop-out .12s ease-in; }
+@keyframes bmpop-in { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes bmpop-out { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-4px); } }
+
+/* ---- bookmark right-click context menu ----------------------------------*/
+#bmctx {
+  position: fixed;
+  min-width: 180px;
+  background: var(--bg2);
+  border: 1px solid var(--active);
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
+  z-index: 26;
+}
+#bmctx[hidden] { display: none; }
+#bmctx .menuitem.danger { color: var(--red); }
+#bmfolderpop .menuitem .arrow { margin-left: auto; color: var(--muted); }
+#bmfolderpop .menuitem.back { color: var(--muted); }
+#bmfolderpop .menuitem .ico { display: inline-flex; align-items: center; width: 16px; }
+#bmfolderpop .menuitem .ico .favicon { width: 15px; height: 15px; object-fit: contain; border-radius: 3px; }
+#bmfolderpop .empty { padding: 8px 10px; color: var(--muted); font-size: 12px; border-radius: 6px; text-align: center; }
+/* Dragging a bookmark over an empty folder's dropdown: the hint itself lights up
+   as the drop target (mirrors the .bm.drop-into ring on a bar chip). */
+#bmfolderpop .empty.drop-into { background: color-mix(in srgb, var(--fg) 10%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--fg) 45%, transparent); color: var(--fg); }
+.bm .fico { display: inline-flex; align-items: center; color: var(--muted); }
+
+/* ---- overlay panels ------------------------------------------------------*/
+#panel {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  z-index: 10;
+}
+#panel[hidden] { display: none; }
+#panelhead {
+  display: flex; align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--bg3);
+  font-size: 16px;
+}
+#paneltitle { flex: 1; font-weight: 600; }
+#panelbody { flex: 1; overflow-y: auto; padding: 10px 18px; }
+
+.list-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 9px 8px; border-radius: 8px;
+}
+.list-item:hover { background: var(--bg2); }
+.list-item .main { flex: 1; min-width: 0; cursor: pointer; }
+.list-item .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-item .u { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-item .meta { color: var(--muted); font-size: 11px; }
+.list-item button { display: inline-flex; align-items: center; justify-content: center; background: transparent; border: none; color: var(--muted); cursor: pointer; }
+.list-item button:hover { color: var(--red); }
+.empty { color: var(--muted); padding: 30px; text-align: center; }
+
+.setting {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 8px; border-bottom: 1px solid var(--bg2);
+}
+.setting .info { flex: 1; }
+.setting .info .name { font-size: 14px; }
+.setting .info .desc { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.switch { width: 44px; height: 24px; border-radius: 12px; background: var(--active); position: relative; cursor: pointer; transition: background .15s; }
+.switch.on { background: var(--accent); }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left .15s; }
+.switch.on::after { left: 22px; }
+/* Segmented language toggle (English / 한국어). */
+.langseg { display: inline-flex; flex: none; border-radius: 8px; background: var(--active); padding: 2px; gap: 2px; }
+.langopt { border: none; background: transparent; color: var(--muted); font-size: 13px; padding: 5px 12px; border-radius: 6px; cursor: pointer; }
+.langopt.on { background: var(--accent); color: #fff; }
+.note { color: var(--yellow); font-size: 12px; padding: 12px 8px; }
+.section-title { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin: 16px 8px 6px; }
+
+/* ---- internal Settings page (mybrowser://settings, a real tab) -----------*/
+/* Loaded as a content view below the bar, so unlike the chrome it scrolls and
+   gets a solid background. Reuses the .setting/.switch/.langseg/.section-title
+   rows above. */
+body.settingspage { overflow: auto; height: 100%; background: var(--bg); }
+body.settingspage #settingsroot { max-width: 760px; margin: 0 auto; padding: 28px 24px 60px; }
+body.settingspage h1 { font-size: 22px; font-weight: 600; margin: 8px 0 18px; }
+/* First section heading sits right under the title — drop its top margin. */
+body.settingspage #settingsbody > .section-title:first-child { margin-top: 0; }
+
+/* ---- scrollbars: hide native; a custom overlay floats over the content -----
+   (see ui/overlayScrollbar.js). Hiding the native scrollbar means no gutter is
+   reserved, so content never shifts when the scrollbar shows/hides. */
+#panelbody, #bmtree-list, body.settingspage { scrollbar-width: none; }
+#panelbody::-webkit-scrollbar,
+#bmtree-list::-webkit-scrollbar,
+body.settingspage::-webkit-scrollbar { width: 0; height: 0; }
+
+/* ---- interstitial --------------------------------------------------------*/
+#interstitial {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--red);
+  z-index: 15;
+}
+#interstitial[hidden] { display: none; }
+#interstitial .sheet { max-width: 520px; padding: 40px; color: #11111b; }
+#interstitial .warnicon { font-size: 56px; }
+#interstitial h1 { font-size: 24px; margin: 16px 0 10px; }
+#interstitial p { font-size: 14px; line-height: 1.6; opacity: .85; word-break: break-all; }
+#interstitial .row { display: flex; gap: 10px; margin-top: 26px; }
+#interstitial .mini { background: rgba(17,17,27,.15); color: #11111b; }
+#interstitial .mini.danger { background: #11111b; color: var(--red); }
