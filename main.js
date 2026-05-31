@@ -1,12 +1,18 @@
 'use strict';
 
 const {
-  app, BrowserWindow, WebContentsView, ipcMain, session, Menu, shell, clipboard,
+  app, BrowserWindow, WebContentsView, ipcMain, session, Menu, shell, clipboard, dialog,
 } = require('electron');
 const path = require('node:path');
+const fs = require('node:fs');
 const { Store } = require('./store');
 const { PasswordVault } = require('./passwords');
 const blocker = require('./blocker');
+
+// The content preload is the esbuild bundle (dist/), not the source: a sandboxed
+// preload can't require() local files at runtime, so shared modules are inlined
+// at build time. `npm start` builds it first; see build.js / CLAUDE.md.
+const TAB_PRELOAD = path.join(__dirname, 'dist', 'tabPreload.js');
 
 // ---------------------------------------------------------------------------
 // Rendering smoothness. These switches MUST be appended before app is ready.
@@ -298,7 +304,7 @@ class Browser {
     const view = new WebContentsView({
       webPreferences: {
         session: this.ctx.session,
-        preload: path.join(__dirname, 'dist', 'tabPreload.js'), // esbuild-bundled (npm run build)
+        preload: TAB_PRELOAD,
         sandbox: true, contextIsolation: true, nodeIntegration: false,
         webSecurity: true, allowRunningInsecureContent: false, webviewTag: false,
         spellcheck: true,
@@ -863,6 +869,16 @@ function listProfileNames() {
 Menu.setApplicationMenu(null); // shortcuts are handled via before-input-event
 
 app.whenReady().then(() => {
+  // Fail fast (not silently): without the bundled preload, web pages would lose
+  // their scrollbars, the auto-hide reveal, and password capture/autofill.
+  if (!fs.existsSync(TAB_PRELOAD)) {
+    const msg = `Missing ${path.relative(__dirname, TAB_PRELOAD)} — run \`npm run build\` `
+      + '(or `npm start`, which builds for you).';
+    console.error('[mybrowser] ' + msg);        // visible in the launching terminal
+    dialog.showErrorBox('Build required', msg); // and a dialog for no-terminal launches
+    app.exit(1);
+    return;
+  }
   wireIpc();
   createWindow('default');
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow('default'); });

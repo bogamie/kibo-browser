@@ -8,7 +8,17 @@
 
 ```bash
 npm install
-npm start
+npm start          # esbuild로 프리로드를 빌드(dist/)한 뒤 electron 실행
+```
+
+`npm start`는 실행 전에 `npm run build`를 자동으로 돌립니다. 콘텐츠 프리로드
+(`tabPreload.js`)는 샌드박스 때문에 런타임에 로컬 파일을 `require`할 수 없어,
+공유 모듈(`ui/scrollbarCore.js`)을 빌드 시점에 esbuild가 번들로 끼워넣어
+`dist/tabPreload.js`를 만듭니다. 개발 중 프리로드를 자주 고친다면:
+
+```bash
+npm run build      # 프리로드 한 번 번들
+npm run watch      # 변경 시 자동 재빌드
 ```
 
 > **Linux 샌드박스 안내:** `The SUID sandbox helper binary ... mode 4755` 오류가 나면
