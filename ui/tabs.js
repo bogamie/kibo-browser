@@ -33,7 +33,7 @@ function makeTabEl(id) {
   title.className = 'title';
   const close = document.createElement('button');
   close.className = 'close';
-  close.innerHTML = ICONS.closeSm;
+  close.innerHTML = ICONS.close;
   close.onclick = (e) => { e.stopPropagation(); window.api.closeTab(id); };
   el.append(dot, title, close);
   const rec = { el, dot, title };

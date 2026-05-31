@@ -29,15 +29,6 @@ class PasswordVault {
   get available() { return this.persistent; }
   get usingOsEncryption() { return this.encrypted; }
 
-  _enc(text) {
-    if (safeStorage.isEncryptionAvailable()) {
-      this.encrypted = true;
-      return 'v1:' + safeStorage.encryptString(text).toString('base64');
-    }
-    this.encrypted = false;
-    return 'b64:' + Buffer.from(text, 'utf8').toString('base64'); // fallback
-  }
-
   _dec(blob) {
     if (blob.startsWith('v1:')) {
       return safeStorage.decryptString(Buffer.from(blob.slice(3), 'base64'));
@@ -62,7 +53,12 @@ class PasswordVault {
     if (!this.persistent) return;
     try {
       fs.mkdirSync(this.dir, { recursive: true });
-      const out = { creds: this.creds.map((c) => ({ ...c, password: this._enc(c.password) })) };
+      // Query the OS keyring once for the whole batch, not per credential.
+      this.encrypted = safeStorage.isEncryptionAvailable();
+      const enc = (text) => this.encrypted
+        ? 'v1:' + safeStorage.encryptString(text).toString('base64')
+        : 'b64:' + Buffer.from(text, 'utf8').toString('base64'); // fallback
+      const out = { creds: this.creds.map((c) => ({ ...c, password: enc(c.password) })) };
       fs.writeFileSync(this.file, JSON.stringify(out));
     } catch (e) {
       console.error('vault save failed:', e.message);

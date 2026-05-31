@@ -28,12 +28,7 @@ async function renderHistory() {
   panelTitle.textContent = tr('panel_history');
   const list = await window.api.listHistory();
   panelBody.replaceChildren();
-  const head = document.createElement('div');
-  head.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:6px';
-  const clear = document.createElement('button');
-  clear.className = 'mini'; clear.textContent = tr('clearAll');
-  clear.onclick = () => { window.api.clearHistory(); renderHistory(); };
-  head.append(clear); panelBody.append(head);
+  panelBody.append(clearHeader('clearAll', () => { window.api.clearHistory(); renderHistory(); }));
   if (!list.length) { panelBody.append(emptyMsg(tr('noHistory'))); return; }
   for (const h of list) {
     panelBody.append(listRow({
@@ -48,12 +43,7 @@ async function renderDownloads() {
   panelTitle.textContent = tr('panel_downloads');
   const list = await window.api.listDownloads();
   panelBody.replaceChildren();
-  const head = document.createElement('div');
-  head.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:6px';
-  const clear = document.createElement('button');
-  clear.className = 'mini'; clear.textContent = tr('clearList');
-  clear.onclick = () => { window.api.clearDownloads(); renderDownloads(); };
-  head.append(clear); panelBody.append(head);
+  panelBody.append(clearHeader('clearList', () => { window.api.clearDownloads(); renderDownloads(); }));
   if (!list.length) { panelBody.append(emptyMsg(tr('noDownloads'))); return; }
   for (const d of list) panelBody.append(downloadRow(d));
 }
@@ -102,7 +92,8 @@ function passwordRow(c) {
   const main = document.createElement('div'); main.className = 'main';
   const t = document.createElement('div'); t.className = 't'; t.textContent = c.origin;
   const u = document.createElement('div'); u.className = 'u';
-  u.textContent = `${c.username || tr('pass_noUsername')} · ${c.password}`;
+  const line = (pw) => `${c.username || tr('pass_noUsername')} · ${pw}`;
+  u.textContent = line(c.password);
   main.append(t, u); row.append(main);
 
   const show = document.createElement('button'); show.innerHTML = ICONS.eye; show.title = tr('pass_show');
@@ -110,8 +101,8 @@ function passwordRow(c) {
   let shown = false;
   show.onclick = async () => {
     shown = !shown;
-    if (shown) { const full = await window.api.revealPassword(c.id); if (full) u.textContent = `${c.username || tr('pass_noUsername')} · ${full.password}`; }
-    else u.textContent = `${c.username || tr('pass_noUsername')} · ••••••••`;
+    if (shown) { const full = await window.api.revealPassword(c.id); if (full) u.textContent = line(full.password); }
+    else u.textContent = line(c.password);   // c.password is the vault-masked value
   };
   const del = document.createElement('button'); del.innerHTML = ICONS.trash; del.title = tr('delete');
   del.onclick = () => { window.api.removePassword(c.id); renderPasswords(); };
@@ -120,6 +111,16 @@ function passwordRow(c) {
 }
 
 // ---- small render helpers -------------------------------------------------
+// Right-aligned header holding a single "clear all/list" button.
+function clearHeader(labelKey, onClear) {
+  const head = document.createElement('div');
+  head.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:6px';
+  const clear = document.createElement('button');
+  clear.className = 'mini'; clear.textContent = tr(labelKey);
+  clear.onclick = onClear;
+  head.append(clear);
+  return head;
+}
 function listRow({ title, url, meta, onOpen, onRemove }) {
   const row = document.createElement('div'); row.className = 'list-item';
   const main = document.createElement('div'); main.className = 'main';
@@ -127,7 +128,7 @@ function listRow({ title, url, meta, onOpen, onRemove }) {
   const u = document.createElement('div'); u.className = 'u'; u.textContent = url;
   main.append(t, u); main.onclick = onOpen;
   const m = document.createElement('div'); m.className = 'meta'; m.textContent = meta || '';
-  const del = document.createElement('button'); del.innerHTML = ICONS.closeSm; del.title = tr('delete'); del.onclick = onRemove;
+  const del = document.createElement('button'); del.innerHTML = ICONS.close; del.title = tr('delete'); del.onclick = onRemove;
   row.append(main, m, del);
   return row;
 }

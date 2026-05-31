@@ -60,7 +60,6 @@ function getProfile(name, { incognito = false } = {}) {
   const ctx = {
     name,
     incognito,
-    persistent: !incognito,
     session: sess,
     store: new Store(dir, !incognito),
     vault: new PasswordVault(dir, !incognito),
@@ -430,7 +429,6 @@ class Browser {
     this.send('panel:close');
     this.relayout();
     this.emitTabs();
-    this._offerAutofill(this.tabs.get(id));
   }
 
   closeTab(id) {
@@ -484,8 +482,7 @@ class Browser {
 
   // ---- security: cert errors + https fallback ------------------------------
   _onCertError(event, errUrl, callback, tabId) {
-    let host = '';
-    try { host = new URL(errUrl).host; } catch {}
+    const host = hostOf(errUrl);
     if (this.ctx.certAllow.has(host)) { event.preventDefault(); callback(true); return; }
     event.preventDefault();
     callback(false);
@@ -513,7 +510,8 @@ class Browser {
   proceed(url) {
     const view = this._active();
     if (!view) return;
-    try { this.ctx.certAllow.add(new URL(url).host); } catch {}
+    const host = hostOf(url);
+    if (host) this.ctx.certAllow.add(host);
     this.overlay = false;
     view._upgraded = null;                 // don't re-upgrade if it was an http fallback
     view.webContents.loadURL(url);
@@ -539,12 +537,6 @@ class Browser {
       broadcastState(this.ctx);
     }
     this._pendingCred = null;
-  }
-
-  _offerAutofill(view) {
-    if (!view) return;
-    // The content preload pulls credentials via the global passwords:get
-    // handler (registered once in wireIpc), so nothing to push here.
   }
 
   // ---- keyboard shortcuts (work whether page or chrome has focus) ----------

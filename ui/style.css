@@ -10,7 +10,6 @@
   --green: #7cc08a;
   --red: #d9697a;
   --yellow: #cfae6a;
-  --surface: #1c1c1e;
 }
 
 * { box-sizing: border-box; }
@@ -373,9 +372,6 @@ body.popup-open #tabsrow, body.popup-open #toolbar { -webkit-app-region: no-drag
   font: inherit;
 }
 #bmedit input:focus, #bmedit select:focus { border-color: var(--accent); }
-#bmedit-newrow { display: flex; gap: 6px; }
-#bmedit-newrow[hidden] { display: none; }
-#bmedit-newrow input { flex: 1; }
 .bmedit-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 2px; }
 
 /* ---- new-folder dialog (tree picker, Chrome-style) ----------------------*/

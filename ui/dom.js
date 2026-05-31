@@ -44,7 +44,6 @@ const STAR_PATH = '<path d="M8 1.7l1.9 3.96 4.35.63-3.15 3.07.74 4.32L8 11.65 4.
 // All chrome button icons share one size (16) and stroke (1.5).
 const ICONS = {
   close: svgIcon('<path d="M4 4l8 8M12 4l-8 8"/>'),
-  closeSm: svgIcon('<path d="M4 4l8 8M12 4l-8 8"/>'),
   star: svgIcon(STAR_PATH),
   starFilled: svgIcon(STAR_PATH, { fill: 'currentColor' }),
   lock: svgIcon('<rect x="3.5" y="7.2" width="9" height="6" rx="1.2"/><path d="M5.5 7.2V5.3a2.5 2.5 0 0 1 5 0v1.9"/>'),

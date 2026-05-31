@@ -83,7 +83,6 @@ class Store {
   bookmarks() { return this.data.bookmarks; }
   bookmarkFolders() { return this.data.bookmarkFolders; }
   isBookmarked(url) { return this.data.bookmarks.some((b) => b.url === url); }
-  getBookmark(url) { return this.data.bookmarks.find((b) => b.url === url) || null; }
 
   // --- sibling ordering (folders + bookmarks share one order space) ---
   // Backfill `order` for data saved before ordering existed: folders first,
@@ -177,15 +176,7 @@ class Store {
   }
   // Delete a folder and everything nested inside it (subfolders + bookmarks).
   removeFolder(id) {
-    const doomed = new Set([id]);
-    for (let grew = true; grew;) {
-      grew = false;
-      for (const f of this.data.bookmarkFolders) {
-        if (!doomed.has(f.id) && f.parentId != null && doomed.has(f.parentId)) {
-          doomed.add(f.id); grew = true;
-        }
-      }
-    }
+    const doomed = this._folderDescendants(id);
     this.data.bookmarkFolders = this.data.bookmarkFolders.filter((f) => !doomed.has(f.id));
     this.data.bookmarks = this.data.bookmarks.filter((b) => !doomed.has(b.parentId));
     this._save();

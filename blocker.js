@@ -33,6 +33,12 @@ const BLOCKED_DOMAINS = [
   'mc.yandex.ru', 'matomo.cloud', 'clarity.ms', 'bat.bing.com',
 ];
 
+// Split the list once at load: plain host suffixes vs. entries with a path
+// (e.g. 'yandex.ru/metrika'), which need a full-URL substring match. This keeps
+// the per-request hot loop from re-checking `d.includes('/')` on every entry.
+const HOST_RULES = BLOCKED_DOMAINS.filter((d) => !d.includes('/'));
+const PATH_RULES = BLOCKED_DOMAINS.filter((d) => d.includes('/'));
+
 function hostnameOf(url) {
   try { return new URL(url).hostname.toLowerCase(); } catch { return ''; }
 }
@@ -40,9 +46,8 @@ function hostnameOf(url) {
 function isBlocked(url) {
   const host = hostnameOf(url);
   if (!host) return false;
-  return BLOCKED_DOMAINS.some(
-    (d) => host === d || host.endsWith('.' + d) || (url.includes(d) && d.includes('/')),
-  );
+  if (HOST_RULES.some((d) => host === d || host.endsWith('.' + d))) return true;
+  return PATH_RULES.some((d) => url.includes(d));
 }
 
 /**
