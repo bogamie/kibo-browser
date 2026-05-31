@@ -12,6 +12,11 @@
 // webFrame; the page itself can't see any of it.
 // ---------------------------------------------------------------------------
 const { ipcRenderer, webFrame } = require('electron');
+// Shared overlay-scrollbar core. esbuild inlines this into dist/tabPreload.js at
+// build time — a sandboxed preload can't require local files at runtime (see
+// build.js). ui/overlayScrollbar.js draws the same bar on the chrome's own pages
+// from this very module.
+const C = require('./ui/scrollbarCore.js');
 
 // ---- 1. Auto-hide reveal: pointer near the top edge -----------------------
 // Two thresholds (hysteresis) so the bar doesn't flicker: reveal when the
@@ -40,23 +45,13 @@ window.addEventListener('mouseenter', reportEdge, { passive: true, capture: true
 // any inner scroll container — so scrollbars look identical across every site.
 // Each indicator shows only while its element is scrolling and fades ~1.1s after
 // it stops. insertCSS is a user stylesheet (CSP-proof), re-applied per document;
-// the universal selector covers scrollbar-width (which isn't inherited). Mirrors
-// ui/overlayScrollbar.js (which styles the chrome's own pages).
-// INTERACTIVE (mirrors ui/overlayScrollbar.js): the thumb drags and the track
-// click-pages like a real browser scrollbar, and the bar thickens on hover. Each
-// target gets a `rail` (full-height track hit area, normally click-through) that
-// holds the visible `thumb`. To keep the "never swallows a click" promise the
-// rail is pointer-events:none EXCEPT while the pointer is in its right-edge hover
-// zone (or a drag is underway), so site content under the bar stays clickable.
-const SB_THIN = 3;    // idle thumb width
-const SB_THICK = 7;   // hovered/dragged thumb width
-const SB_ZONE = 14;   // right-edge hover/hit strip width
-const SB_MIN = 24;    // smallest thumb so it stays grabbable-looking
-const SB_PAGE = 0.9;  // viewport fraction a track-click jumps
-webFrame.insertCSS(`
-  * { scrollbar-width: none !important; }
-  ::-webkit-scrollbar { width: 0 !important; height: 0 !important; }
-`);
+// the universal selector covers scrollbar-width (which isn't inherited).
+// The geometry / styles / interactions come from the shared ScrollbarCore (`C`,
+// inlined above); this section owns only the per-page lifecycle — a rail+thumb
+// per scrolled target, created on scroll and removed after it fades. To keep the
+// "never swallows a click" promise each rail is pointer-events:none EXCEPT while
+// the pointer is in its hover zone (or a drag is underway).
+webFrame.insertCSS(C.NATIVE_HIDE_CSS);
 
 const sbThumbs = new Map();   // scrolled target (Element or document) -> state
 
@@ -96,22 +91,17 @@ function sbMetrics(target) {
   const sc = sbScroller(target);
   let ch, sh, vTop, vH, right;
   if (isDoc) {
-    ch = window.innerHeight; sh = sc.scrollHeight;
-    if (sh <= ch + 1) return null;
-    vTop = 0; vH = ch; right = 2;
+    ch = window.innerHeight; sh = sc.scrollHeight; vTop = 0; vH = ch; right = 2;
   } else {
     if (!(target instanceof Element)) return null;
     ch = target.clientHeight; sh = target.scrollHeight;
-    if (sh <= ch + 1) return null;
     const r = target.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) return null;
     vTop = r.top; vH = r.height; right = window.innerWidth - r.right + 2;
   }
-  const th = Math.max(SB_MIN, vH * (ch / sh));
-  const maxTravel = vH - th;
-  const range = sh - ch;
-  const top = vTop + (maxTravel <= 0 ? 0 : (sc.scrollTop / range) * maxTravel);
-  return { isDoc, sc, ch, sh, vTop, vH, right, th, maxTravel, range, top };
+  const m = C.compute({ ch, sh, vTop, vH, right, scrollTop: sc.scrollTop });
+  if (m) m.isDoc = isDoc;   // callers (sbMeasure/sbHit) read this back
+  return m;
 }
 
 function sbMeasure(target, s) {
@@ -120,14 +110,7 @@ function sbMeasure(target, s) {
   const thick = s.hovering || s.dragging;
   if (m) {
     s.isDoc = m.isDoc;
-    s.rail.style.top = m.vTop + 'px';
-    s.rail.style.height = m.vH + 'px';
-    s.rail.style.right = (m.isDoc ? 0 : m.right) + 'px';
-    s.thumb.style.right = (m.isDoc ? m.right : 0) + 'px';
-    s.thumb.style.height = m.th + 'px';
-    s.thumb.style.top = (m.top - m.vTop) + 'px';
-    s.thumb.style.width = (thick ? SB_THICK : SB_THIN) + 'px';
-    s.thumb.style.background = thick ? 'rgba(120,120,130,.9)' : 'rgba(142,142,150,.62)';
+    C.applyStyles(s.rail, s.thumb, m, m.isDoc, thick);
   }
   s.rail.style.opacity = (m && (s.active || s.hovering || s.dragging)) ? '1' : '0';
   s.rail.style.pointerEvents = (m && (s.hovering || s.dragging)) ? 'auto' : 'none';
@@ -136,11 +119,7 @@ const sbPaint = (target, s) => { if (!s.raf) s.raf = requestAnimationFrame(() =>
 
 function sbHit(target, x, y) {
   const m = sbMetrics(target);
-  if (!m) return false;
-  const railRight = window.innerWidth - (m.isDoc ? 0 : m.right);
-  const railLeft = railRight - SB_ZONE;
-  const rightBound = m.isDoc ? window.innerWidth : railRight + 2;
-  return x >= railLeft && x <= rightBound && y >= m.vTop && y <= m.vTop + m.vH;
+  return m ? C.hitTest(x, y, m, m.isDoc, window.innerWidth) : false;
 }
 
 function sbEnsure(target) {
@@ -148,13 +127,9 @@ function sbEnsure(target) {
   if (s) return s;
   if (!sbMetrics(target)) return null;          // target isn't actually scrollable
   const rail = document.createElement('div');
-  rail.style.cssText =
-    `position:fixed;width:${SB_ZONE}px;opacity:0;pointer-events:none;`
-    + 'z-index:2147483647;transition:opacity .3s ease;';
+  rail.style.cssText = C.railCss;
   const thumb = document.createElement('div');
-  thumb.style.cssText =
-    `position:absolute;width:${SB_THIN}px;border-radius:${SB_THICK / 2}px;`
-    + 'background:rgba(142,142,150,.62);transition:width .12s ease, background .12s ease;';
+  thumb.style.cssText = C.thumbCss;
   rail.appendChild(thumb);
   // Append to <html> (not <body>): a transform on body would make this fixed
   // rail scroll with the page.
@@ -190,68 +165,30 @@ function sbShow(target) {
 
 // ---- drag the thumb / page the track --------------------------------------
 function sbStartDrag(target, s, e) {
-  e.preventDefault();
-  if (!sbMetrics(target)) return;
+  const started = C.startDrag(e, {
+    getMetrics: () => sbMetrics(target),
+    getScroller: () => sbScroller(target),
+    onEnd: (ev) => {
+      s.dragging = false;
+      s.hovering = sbHit(target, ev.clientX, ev.clientY);
+      if (!s.hovering) sbScheduleHide(target, s);
+      sbPaint(target, s);
+    },
+  });
+  if (!started) return;
   s.dragging = true;
-  // Incremental drag: move by the pointer DELTA since the last move (not an
-  // absolute map from the grab point). If content reflows mid-drag and the thumb
-  // shifts, the next move nudges it from where it is — it never teleports to the
-  // cursor, so the thumb/cursor gap is preserved.
-  let lastY = e.clientY;
-  const onMove = (ev) => {
-    const m = sbMetrics(target);    // re-read each move: content may reflow mid-drag
-    if (m && m.maxTravel > 0) {
-      const next = m.sc.scrollTop + (ev.clientY - lastY) * m.range / m.maxTravel;
-      m.sc.scrollTop = Math.max(0, Math.min(m.range, next));
-    }
-    lastY = ev.clientY;
-  };
-  const onUp = (ev) => {
-    s.dragging = false;
-    window.removeEventListener('mousemove', onMove, true);
-    window.removeEventListener('mouseup', onUp, true);
-    s.hovering = sbHit(target, ev.clientX, ev.clientY);
-    if (!s.hovering) sbScheduleHide(target, s);
-    sbPaint(target, s);
-  };
-  window.addEventListener('mousemove', onMove, true);
-  window.addEventListener('mouseup', onUp, true);
   sbPaint(target, s);
 }
 
-function sbStartPage(target, s, e) {
-  e.preventDefault();
-  const dirAt = (cy) => { const m = sbMetrics(target); if (!m) return 0; return cy < m.top ? -1 : (cy > m.top + m.th ? 1 : 0); };
-  const dir = dirAt(e.clientY);
-  if (!dir) return;
-  let lastCy = e.clientY;
-  const page = () => {
-    const m = sbMetrics(target); if (!m) return;
-    m.sc.scrollTop = Math.max(0, Math.min(m.range, m.sc.scrollTop + dir * m.ch * SB_PAGE));
-  };
-  page();
-  let holdT = null, repT = null;
-  const onMove = (ev) => { lastCy = ev.clientY; };
-  const stop = () => {
-    clearTimeout(holdT); clearInterval(repT);
-    window.removeEventListener('mousemove', onMove, true);
-    window.removeEventListener('mouseup', stop, true);
-  };
-  holdT = setTimeout(() => {
-    repT = setInterval(() => {
-      if (dirAt(lastCy) !== dir) { stop(); return; } // thumb has reached the cursor
-      page();
-    }, 60);
-  }, 300);
-  window.addEventListener('mousemove', onMove, true);
-  window.addEventListener('mouseup', stop, true);
+function sbStartPage(target, e) {
+  C.startPage(e, { getMetrics: () => sbMetrics(target), getScroller: () => sbScroller(target) });
 }
 
 function sbWire(target, s) {
   s.rail.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
     e.stopPropagation();                              // shield the page from scrollbar clicks
-    if (e.target === s.thumb) sbStartDrag(target, s, e); else sbStartPage(target, s, e);
+    if (e.target === s.thumb) sbStartDrag(target, s, e); else sbStartPage(target, e);
   });
 }
 
@@ -268,7 +205,7 @@ window.addEventListener('resize', () => {
 let sbMoveRaf = 0, sbLastX = 0, sbLastY = 0;
 function sbHover() {
   sbMoveRaf = 0;
-  if (sbLastX >= window.innerWidth - SB_ZONE - 2 && sbMetrics(document)) sbEnsure(document);
+  if (sbLastX >= window.innerWidth - C.ZONE - 2 && sbMetrics(document)) sbEnsure(document);
   for (const [t, s] of sbThumbs) {
     if (s.dragging) continue;
     const h = sbHit(t, sbLastX, sbLastY);

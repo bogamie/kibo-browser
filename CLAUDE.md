@@ -10,11 +10,21 @@ MyBrowser is a hardened Chromium-based web browser built on Electron 42. Its two
 
 ```bash
 npm install
-npm start          # electron .
+npm start          # npm run build (esbuild) && electron .
+npm run build      # bundle the content preload(s) into dist/ (run automatically by npm start)
+npm run watch      # rebuild preloads on change during development
 npm start -- --no-sandbox   # temporary workaround if the SUID sandbox errors (NOT recommended)
 ```
 
-There is no build step, linter, or test suite — it runs directly from source.
+There is no linter or test suite. The **only** build step is a tiny esbuild pass
+(`build.js`) that bundles the content preloads which import a shared module —
+currently just `tabPreload.js`, which pulls in `ui/scrollbarCore.js`. A sandboxed
+preload can't `require()` a local file at runtime, so esbuild inlines the import
+at build time and `main.js` loads the bundled `dist/tabPreload.js`. Everything
+else (`main.js`, the chrome renderer `ui/*.js`) still runs directly from source —
+the renderer loads classic `<script>`s, so it shares modules like
+`scrollbarCore.js` via a plain global, no bundling. `dist/` is gitignored;
+`npm start` rebuilds it.
 
 **Linux sandbox gotcha:** after `npm install`, the Chromium SUID sandbox binary loses its setuid bit. If startup fails with `The SUID sandbox helper binary ... mode 4755`, run once:
 ```bash
@@ -75,4 +85,4 @@ A `ProfileCtx` (created in `getProfile`) bundles an Electron `session`, a `Store
 - **All user-facing strings go through `ui/i18n.js`** — `tr('key')` in `chrome.js`, `data-i18n` / `data-i18n-title` / `data-i18n-ph` attributes in `index.html`. English is default, Korean (`ko`) toggles live via the `lang` setting. Never hardcode display text. (The function is named `tr`, not `t`, because `t` is the tab loop variable in `chrome.js`.)
 - **Icons are inline SVGs** with `viewBox="0 0 16 16"` and `currentColor`, built via the `svgIcon()` helper in `dom.js` (the `ICONS` map) and a parallel set in `index.html`. Deliberately no `width`/`height` attributes — size is set purely in CSS per context (Chromium lets the SVG size attribute override CSS otherwise).
 - **GPU/rendering switches** at the top of `main.js` are load-bearing and heavily commented — read those comments before touching them. Stay on the X11/XWayland path (`ozone-platform-hint=auto`); native Wayland left the frameless window invisible on the dev machine. Do not add `--disable-gpu`.
-- **Scrollbars** are custom thin *overlay* indicators, not native ones. Native scrollbars are hidden (so no gutter is reserved and content never shifts); a ~3px thumb floats over the content, appears only while scrolling, and fades out ~1.1s after scrolling stops. It's `pointer-events: none`, so it can't eat clicks. `ui/overlayScrollbar.js` (`overlayScrollbar(target)`) drives the browser's own surfaces (settings page, history/downloads/passwords panels, folder dialog) per known scroll container. `tabPreload.js` carries a mirror that runs on every web page: it hides *all* native scrollbars via `webFrame.insertCSS` and, with one capture-phase scroll listener, draws an overlay over whatever is scrolling — the main page or any inner scroll container — so every site's scrollbars look identical (thumbs are created on scroll and removed after they fade). Chromium removed the `OverlayScrollbar` engine flag in 115, hence the hand-rolled version.
+- **Scrollbars** are custom thin *overlay* indicators, not native ones. Native scrollbars are hidden (so no gutter is reserved and content never shifts); a ~3px thumb floats over the content, appears only while scrolling, and fades out ~1.1s after scrolling stops. It's `pointer-events: none`, so it can't eat clicks. The shared constants, geometry, styles and pointer interactions live in **`ui/scrollbarCore.js`** (one source of truth — used by both surfaces below, so they can't drift). `ui/overlayScrollbar.js` (`overlayScrollbar(target)`) drives the browser's own surfaces (settings page, history/downloads/passwords panels, folder dialog) per known scroll container, reading `scrollbarCore.js` as a classic-`<script>` global. `tabPreload.js` runs the same core on every web page (esbuild inlines `scrollbarCore.js` into the bundled preload): it hides *all* native scrollbars via `webFrame.insertCSS` and, with one capture-phase scroll listener, draws an overlay over whatever is scrolling — the main page or any inner scroll container — so every site's scrollbars look identical (thumbs are created on scroll and removed after they fade). Each side keeps only its own lifecycle/event wiring (one rail vs many). Chromium removed the `OverlayScrollbar` engine flag in 115, hence the hand-rolled version.

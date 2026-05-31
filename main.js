@@ -298,7 +298,7 @@ class Browser {
     const view = new WebContentsView({
       webPreferences: {
         session: this.ctx.session,
-        preload: path.join(__dirname, 'tabPreload.js'),
+        preload: path.join(__dirname, 'dist', 'tabPreload.js'), // esbuild-bundled (npm run build)
         sandbox: true, contextIsolation: true, nodeIntegration: false,
         webSecurity: true, allowRunningInsecureContent: false, webviewTag: false,
         spellcheck: true,
