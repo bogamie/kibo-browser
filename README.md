@@ -1,7 +1,9 @@
-# MyBrowser
+# Kibo
 
-나만의 Chromium 기반 웹 브라우저. Electron 위에 직접 만든 UI/탭 관리와
-보안 하드닝을 얹은 실용형 브라우저입니다. **Zen 스타일 자동 숨김 UI**와
+> A minimal, privacy-hardened web browser built on Electron.
+
+Kibo는 Chromium 기반의 미니멀 웹 브라우저입니다. Electron 위에 직접 만든 UI/탭 관리와
+보안 하드닝을 얹었고, **Zen 스타일 자동 숨김 UI**와
 **사이트별 비밀번호 저장/자동입력**을 핵심 기능으로 합니다.
 
 ## 실행

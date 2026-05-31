@@ -19,12 +19,122 @@ function bmChildren(parentId) {
   return items.sort((a, b) => (a.item.order ?? 0) - (b.item.order ?? 0));
 }
 
+// Top-level bar items in order, plus the tail that doesn't fit. The bar never
+// scrolls horizontally (Chrome-style): chips that overflow are hidden and listed
+// in the » overflow menu instead.
+let bmBarItems = [];
+let bmOverflowItems = [];
+
+const overflowBtn = document.createElement('button');
+overflowBtn.className = 'bm-overflow';
+overflowBtn.hidden = true;
+overflowBtn.innerHTML = svgIcon('<path d="M4 4l4 4-4 4M9 4l4 4-4 4"/>'); // »
+overflowBtn.onclick = (e) => { e.stopPropagation(); toggleOverflowPop(); };
+
 function renderBookmarks() {
   bookmarkbar.replaceChildren();
-  for (const { kind, item } of bmChildren(null)) {
+  bmBarItems = bmChildren(null);
+  for (const { kind, item } of bmBarItems) {
     bookmarkbar.append(kind === 'folder' ? makeFolderChip(item) : makeBookmarkChip(item));
   }
+  if (bmBarItems.length) { overflowBtn.title = tr('bm_more'); bookmarkbar.append(overflowBtn); }
   reportLayout();
+  reflowBookmarks();
+}
+
+// Hide the chips that don't fit and surface them through the » button. Chips are
+// left-packed, so the overflow is always a suffix — find the first chip whose
+// right edge passes the bar (minus the » button's reserved space) and cut there.
+function reflowBookmarks() {
+  const chips = [...bookmarkbar.querySelectorAll('.bm')];
+  if (!chips.length) { overflowBtn.hidden = true; bmOverflowItems = []; return; }
+  for (const c of chips) c.style.display = '';
+  overflowBtn.hidden = true;
+  const rightEdge = bookmarkbar.getBoundingClientRect().right - 10; // minus right padding
+  if (chips[chips.length - 1].getBoundingClientRect().right <= rightEdge + 0.5) {
+    bmOverflowItems = [];
+    if (!bmoverflowpop.hidden) closeOverflowPop();
+    return;
+  }
+  overflowBtn.hidden = false;
+  const limit = rightEdge - overflowBtn.getBoundingClientRect().width - 4;
+  let cut = chips.length;
+  for (let i = 0; i < chips.length; i++) {
+    if (chips[i].getBoundingClientRect().right > limit) { cut = i; break; }
+  }
+  for (let i = cut; i < chips.length; i++) chips[i].style.display = 'none';
+  bmOverflowItems = bmBarItems.slice(cut);
+  if (!bmoverflowpop.hidden) renderOverflowPop();   // keep an open menu in sync
+}
+// Recompute when the window (hence the bar) changes width. Coalesce the burst of
+// resize events into one reflow per frame — reflowBookmarks reads layout, so
+// running it per event would force a reflow on every pixel of a drag-resize.
+let reflowRaf = 0;
+window.addEventListener('resize', () => {
+  if (reflowRaf) return;
+  reflowRaf = requestAnimationFrame(() => { reflowRaf = 0; reflowBookmarks(); });
+});
+
+function toggleOverflowPop() { if (bmoverflowpop.hidden) openOverflowPop(); else closeOverflowPop(); }
+function openOverflowPop() {
+  closeFolderPop(); closeCtx();
+  if (!bmedit.hidden) { commitName(); closeBookmarkEditor(); }
+  renderOverflowPop();
+  bmoverflowpop.hidden = false;
+  // Right-align under the » button (it sits at the bar's right edge).
+  const r = overflowBtn.getBoundingClientRect();
+  bmoverflowpop.style.top = Math.round(r.bottom + 4) + 'px';
+  bmoverflowpop.style.left = Math.max(4, Math.round(r.right - bmoverflowpop.getBoundingClientRect().width)) + 'px';
+  reportLayout();
+}
+function closeOverflowPop() {
+  if (bmoverflowpop.hidden) return;
+  bmoverflowpop.hidden = true;
+  reportLayout();
+}
+function renderOverflowPop() {
+  bmoverflowpop.replaceChildren();
+  const mk = (html, onClick) => {
+    const b = document.createElement('button');
+    b.className = 'menuitem';
+    b.innerHTML = html;
+    b.onclick = onClick;
+    bmoverflowpop.append(b);
+    return b;
+  };
+  for (const { kind, item } of bmOverflowItems) {
+    if (kind === 'folder') {
+      mk(`<span class="ico">${ICONS.folder}</span><span>${escapeHtml(item.title)}</span><span class="arrow">›</span>`,
+        (e) => { e.stopPropagation(); closeOverflowPop(); openFolderPop(item.id, overflowBtn); });
+    } else {
+      const row = mk(`${favIco(item.favicon)}<span>${escapeHtml(item.title || item.url)}</span>`,
+        () => { window.api.go(item.url); closeOverflowPop(); });
+      wireBgTabAux(row, item.url, closeOverflowPop);
+    }
+  }
+}
+// Outside-click / Escape dismiss the overflow menu (capture phase, like bmctx).
+document.addEventListener('click', (e) => {
+  if (!bmoverflowpop.hidden && !bmoverflowpop.contains(e.target)
+      && e.target !== overflowBtn && !overflowBtn.contains(e.target)) closeOverflowPop();
+}, true);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeOverflowPop(); }, true);
+
+// A bookmark row's leading favicon as an HTML string (globe fallback), in the
+// menu/overflow `.ico` slot. Bar chips build the icon as a `.fico` element instead.
+function favIco(favicon) {
+  const fav = pickFavicon(favicon);
+  return `<span class="ico">${fav ? faviconImg(fav, { draggable: false }) : ICONS.globe}</span>`;
+}
+// Middle-click → open the url in a background tab (focus stays put). `after` runs
+// afterwards, e.g. to close the menu the row lives in.
+function wireBgTabAux(el, url, after) {
+  el.addEventListener('auxclick', (e) => {
+    if (e.button !== 1) return;
+    e.preventDefault();
+    window.api.newBackgroundTab(url);
+    after?.();
+  });
 }
 
 function makeBookmarkChip(b) {
@@ -40,6 +150,7 @@ function makeBookmarkChip(b) {
   t.textContent = b.title || b.url;
   el.append(ico, t);
   el.onclick = () => window.api.go(b.url);
+  wireBgTabAux(el, b.url);   // middle-click → background tab
   el.oncontextmenu = (e) => { e.preventDefault(); e.stopPropagation(); openBookmarkCtx(e, b); };
   makeChipDraggable(el, b.id, 'bookmark', b.url);
   return el;
@@ -49,6 +160,7 @@ function makeBookmarkChip(b) {
 // itself and inside the folder dropdown (helper in dom.js).
 wireFaviconFallback(bookmarkbar, '.fico', ICONS.globe);
 wireFaviconFallback(bmfolderpop, '.ico', ICONS.globe);
+wireFaviconFallback(bmoverflowpop, '.ico', ICONS.globe);
 
 function makeFolderChip(f) {
   const el = document.createElement('div');
@@ -85,7 +197,14 @@ function moveDragPreview(clientX, clientY) {
 }
 // Capture phase: the open folder dropdown stopPropagation()s its own dragover,
 // so a bubble-phase listener would freeze the preview while the cursor is over it.
-document.addEventListener('dragover', (e) => moveDragPreview(e.clientX, e.clientY), true);
+// This also fires for the whole window (bar, dropdown, page), so it's the single
+// place to spring-close a folder once the cursor leaves its region (chip+dropdown).
+document.addEventListener('dragover', (e) => {
+  moveDragPreview(e.clientX, e.clientY);
+  if (springRegion && !inSpringRegion(e.clientX, e.clientY)) {
+    closeFolderPop();   // clears springChip/springRegion; re-arms if a folder is re-entered
+  }
+}, true);
 
 // Shared drag bootstrap for bar chips and folder-dropdown rows. previewNode is a
 // `.bm` element that floats by the cursor — Wayland renders native drag images
@@ -215,11 +334,13 @@ let springOpened = false;    // did we spring-open a dropdown this drag? (close 
 let springChip = null;       // bar chip whose dropdown is open - kept lit until it closes
 let draggedFromPop = false;  // did this drag start inside the open folder dropdown?
 let droppedInPop = false;    // ...and did it land back inside it (reorder) vs. get pulled out?
+let springRegion = null;     // cached "keep open" box = spring chip ∪ its open dropdown
 // Light exactly one chip (the open folder's), clearing the previously-lit one.
 function setSpringChip(el) {
   if (springChip === el) return;
   if (springChip) springChip.classList.remove('drop-into');
   springChip = el;
+  springRegion = null;       // recomputed by armSpring once the new dropdown is positioned
   if (el) el.classList.add('drop-into');
 }
 function armSpring(folderId, anchor) {
@@ -228,6 +349,32 @@ function armSpring(folderId, anchor) {
   if (bmFolderId === folderId) return;   // already showing this folder
   openFolderPop(folderId, anchor);       // open immediately
   springOpened = true;
+  cacheSpringRegion();                   // measure chip+dropdown once (no per-dragover reflow)
+}
+// The folder's drag region: its bar chip, the dropdown below it, and the thin
+// gap bridging the two. NOT their bounding box — the dropdown is anchored at the
+// chip's left and is usually wider, so a box would stretch the region rightward
+// past the chip and make a rightward exit along the bar feel "sticky" while a
+// leftward one closed at once. Keep these as separate rects so that at bar level
+// only the chip's width counts (symmetric exit both ways), while the descent into
+// the wider dropdown stays generous. Measured once on open (getBoundingClientRect
+// mid-dragover would stutter the bar).
+function cacheSpringRegion() {
+  if (!springChip || bmfolderpop.hidden) { springRegion = null; return; }
+  const c = springChip.getBoundingClientRect();
+  const p = bmfolderpop.getBoundingClientRect();
+  springRegion = {
+    cl: c.left, cr: c.right, ct: c.top, cb: c.bottom,  // chip rect
+    pl: p.left, pr: p.right, pt: p.top, pb: p.bottom,  // dropdown rect
+  };
+}
+function inSpringRegion(x, y) {
+  const r = springRegion;
+  if (!r) return false;
+  const inChip = x >= r.cl && x <= r.cr && y >= r.ct && y <= r.cb;
+  const inPop  = x >= r.pl && x <= r.pr && y >= r.pt && y <= r.pb;
+  const inGap  = x >= r.pl && x <= r.pr && y >= r.cb && y <= r.pt; // chip↔dropdown bridge
+  return inChip || inPop || inGap;
 }
 
 function updateDropTarget(clientX) {
@@ -236,7 +383,14 @@ function updateDropTarget(clientX) {
   if (!dragChips) {
     dragBarRect = bookmarkbar.getBoundingClientRect();
     dragChips = [...bookmarkbar.querySelectorAll('.bm')]
-      .filter((c) => !c.classList.contains('dragging'))
+      // Exclude the dragged chip by identity, NOT the `.dragging` class: that class
+      // is added a frame late (rAF in dragstart, so the native drag image snapshots
+      // first), and the first dragover often beats it — leaving the dragged chip in
+      // this once-built cache. The reorder index would then be counted over N chips
+      // while the store inserts into the siblings minus the dragged one (N-1), so
+      // reorders intermittently overshot or snapped back. dragItem is set synchronously
+      // at dragstart, so it's reliable here.
+      .filter((c) => !(Number(c.dataset.id) === dragItem.id && c.dataset.kind === dragItem.kind))
       .map((c) => {
         const r = c.getBoundingClientRect();
         return { el: c, left: r.left, right: r.right, width: r.width, kind: c.dataset.kind, id: Number(c.dataset.id) };
@@ -256,8 +410,9 @@ function updateDropTarget(clientX) {
     }
   }
 
-  // Not over a folder → show the reorder line. Any open folder dropdown stays up
-  // and its chip stays lit (clearDropHints preserves it); drop here to reorder/un-file.
+  // Not over a folder → show the reorder line. A spring-opened dropdown stays up
+  // (and its chip lit) while the cursor is still in its region — the capture-phase
+  // dragover above closes it once you leave; drop here to reorder/un-file.
   let index = dragChips.length;
   for (let i = 0; i < dragChips.length; i++) {
     if (clientX < dragChips[i].left + dragChips[i].width / 2) { index = i; break; }
@@ -603,6 +758,10 @@ function deleteFolderInChooser(id, name) {
   renderFolderTree();
 }
 
+// Dismiss every transient bookmark popup (inline bubble, folder fly-out,
+// right-click menu) — run before opening one of the modal dialogs below.
+function closeBookmarkPopups() { closeBookmarkEditor(); closeFolderPop(); closeCtx(); }
+
 // --- full "edit bookmark" dialog (modal) -----------------------------------
 // Centered dialog (Chrome's BookmarkEditorView): rename + choose folder + make
 // a new folder. Opened by the right-click "Edit…" or the bubble's "Choose
@@ -610,7 +769,7 @@ function deleteFolderInChooser(id, name) {
 function openBookmarkDialog(id, nameOverride) {
   const b = (state.bookmarks || []).find((x) => x.id === id);
   if (!b) return;
-  closeBookmarkEditor(); closeFolderPop(); closeCtx();
+  closeBookmarkPopups();
   bmDialogMode = 'editBookmark';
   bmEditId = id;
   bmTreeExclude = null;
@@ -632,7 +791,7 @@ function openBookmarkDialog(id, nameOverride) {
 function openFolderDialog(id) {
   const f = (state.bookmarkFolders || []).find((x) => x.id === id);
   if (!f) return;
-  closeBookmarkEditor(); closeFolderPop(); closeCtx();
+  closeBookmarkPopups();
   bmDialogMode = 'editFolder';
   bmEditId = id;
   bmTreeExclude = folderDescendants(id);
@@ -650,7 +809,7 @@ function openFolderDialog(id) {
 
 // Create a brand-new folder: Name = the folder, tree = where to put it.
 function openNewFolderDialog(parentId) {
-  closeBookmarkEditor(); closeFolderPop(); closeCtx();
+  closeBookmarkPopups();
   bmDialogMode = 'newFolder';
   bmEditId = null;
   bmTreeExclude = null;
@@ -819,15 +978,22 @@ function renderFolderPop(folderId, anchor) {
       row = mkItem('', `<span class="ico">${ICONS.folder}</span><span>${escapeHtml(item.title)}</span><span class="arrow">›</span>`,
         () => renderFolderPop(item.id, anchor));
     } else {
-      const fav = pickFavicon(item.favicon);
-      const ico = fav
-        ? `<span class="ico">${faviconImg(fav, { draggable: false })}</span>`
-        : `<span class="ico">${ICONS.globe}</span>`;
-      row = mkItem('', `${ico}<span>${escapeHtml(item.title || item.url)}</span>`,
+      row = mkItem('', `${favIco(item.favicon)}<span>${escapeHtml(item.title || item.url)}</span>`,
         () => { window.api.go(item.url); closeFolderPop(); });
+      wireBgTabAux(row, item.url, closeFolderPop);
     }
     row.dataset.id = String(item.id);
     row.dataset.kind = kind;
+    // Right-click a row inside the dropdown → same menu as the bar chip would show,
+    // but keep the dropdown open behind it (stopPropagation so the document
+    // contextmenu handler doesn't re-close the menu).
+    row.oncontextmenu = (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const opts = { keepFolderPop: true };
+      if (kind === 'folder') openFolderCtx(e, item, row, opts); else openBookmarkCtx(e, item, opts);
+      clearCtxActive();              // drop any previously-lit row
+      row.classList.add('ctx-active');  // keep this row lit while its menu is open
+    };
     makeFolderItemDraggable(row, kind, item);
   }
 
@@ -854,8 +1020,9 @@ function closeFolderPop() {
 
 // --- right-click context menu for bookmark-bar items -----------------------
 // items: array of ['label', fn] / ['label', fn, {danger:true, disabled:true}] / 'sep'.
-function showCtx(x, y, items) {
-  closeBookmarkEditor(); closeFolderPop();
+function showCtx(x, y, items, opts) {
+  closeBookmarkEditor();
+  if (!opts || !opts.keepFolderPop) closeFolderPop();  // keep the dropdown up when invoked from inside it
   bmctx.replaceChildren();
   for (const it of items) {
     if (it === 'sep') {
@@ -885,9 +1052,13 @@ function showCtx(x, y, items) {
   if (r.right > window.innerWidth) bmctx.style.left = Math.max(4, window.innerWidth - r.width - 4) + 'px';
   reportLayout();
 }
-function closeCtx() { if (bmctx.hidden) return; bmctx.hidden = true; reportLayout(); }
+// Drop the lit-row highlight on any folder-dropdown item whose menu was open.
+function clearCtxActive() {
+  for (const r of bmfolderpop.querySelectorAll('.menuitem.ctx-active')) r.classList.remove('ctx-active');
+}
+function closeCtx() { if (bmctx.hidden) return; bmctx.hidden = true; clearCtxActive(); reportLayout(); }
 
-function openBookmarkCtx(e, b) {
+function openBookmarkCtx(e, b, opts) {
   showCtx(e.clientX, e.clientY, [
     [tr('ctx_openNewTab'), () => window.api.newTab(b.url)],
     [tr('ctx_openNewWindow'), () => window.api.newWindow(b.url)],
@@ -899,9 +1070,9 @@ function openBookmarkCtx(e, b) {
     [tr('ctx_delete'), () => window.api.removeBookmark(b.id)],
     'sep',
     [tr('ctx_bmManager'), () => notImplemented()],
-  ]);
+  ], opts);
 }
-function openFolderCtx(e, f, anchor) {
+function openFolderCtx(e, f, anchor, opts) {
   const all = allBookmarksUnder(f.id);
   const empty = all.length === 0;  // Chrome greys out the "open all" rows for an empty folder
   showCtx(e.clientX, e.clientY, [
@@ -914,7 +1085,7 @@ function openFolderCtx(e, f, anchor) {
     [tr('ctx_delete'), () => { if (confirmFolderDelete(f.id, f.title)) window.api.removeBookmarkFolder(f.id); }],
     'sep',
     [tr('ctx_bmManager'), () => notImplemented()],
-  ]);
+  ], opts);
 }
 
 // Every bookmark nested under a folder (null = bar root), depth-first.

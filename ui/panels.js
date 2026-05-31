@@ -17,7 +17,6 @@ async function openPanel(kind) {
   reportLayout();
   if (kind === 'history') await renderHistory();
   else if (kind === 'downloads') await renderDownloads();
-  else if (kind === 'passwords') await renderPasswords();
 }
 
 function timeStr(ts) {
@@ -49,19 +48,13 @@ async function renderDownloads() {
 }
 
 function downloadRow(d) {
-  const row = document.createElement('div');
-  row.className = 'list-item';
-  const main = document.createElement('div'); main.className = 'main';
-  const t = document.createElement('div'); t.className = 't'; t.textContent = d.filename;
-  const sub = document.createElement('div'); sub.className = 'u';
+  const { row, main, u: sub } = listItemBase(d.filename);
   const pct = d.total > 0 ? Math.round((d.received / d.total) * 100) : 0;
   const human = (b) => b > 1e6 ? (b / 1e6).toFixed(1) + 'MB' : Math.round(b / 1e3) + 'KB';
   if (d.state === 'progressing') sub.textContent = `${human(d.received)} / ${d.total > 0 ? human(d.total) : '?'} (${pct}%)`;
   else if (d.state === 'completed') sub.textContent = tr('dl_done', human(d.received));
   else sub.textContent = d.state === 'cancelled' ? tr('dl_cancelled') : tr('dl_failed');
-  main.append(t, sub);
   if (d.state === 'completed') main.onclick = () => window.api.openDownload(d.id);
-  row.append(main);
 
   if (d.state === 'progressing') {
     const cancel = document.createElement('button'); cancel.innerHTML = ICONS.close;
@@ -76,40 +69,6 @@ function downloadRow(d) {
   return row;
 }
 
-async function renderPasswords() {
-  panelTitle.textContent = tr('panel_passwords');
-  const list = await window.api.listPasswords();
-  panelBody.replaceChildren();
-  if (!state.vaultAvailable) panelBody.append(noteMsg(tr('pass_noteIncognito')));
-  else if (!state.osEncryption) panelBody.append(noteMsg(tr('pass_noteNoKeyring')));
-  if (!list || !list.length) { panelBody.append(emptyMsg(tr('noPasswords'))); return; }
-  for (const c of list) panelBody.append(passwordRow(c));
-}
-
-function passwordRow(c) {
-  const row = document.createElement('div');
-  row.className = 'list-item';
-  const main = document.createElement('div'); main.className = 'main';
-  const t = document.createElement('div'); t.className = 't'; t.textContent = c.origin;
-  const u = document.createElement('div'); u.className = 'u';
-  const line = (pw) => `${c.username || tr('pass_noUsername')} · ${pw}`;
-  u.textContent = line(c.password);
-  main.append(t, u); row.append(main);
-
-  const show = document.createElement('button'); show.innerHTML = ICONS.eye; show.title = tr('pass_show');
-  show.style.color = 'var(--accent)';
-  let shown = false;
-  show.onclick = async () => {
-    shown = !shown;
-    if (shown) { const full = await window.api.revealPassword(c.id); if (full) u.textContent = line(full.password); }
-    else u.textContent = line(c.password);   // c.password is the vault-masked value
-  };
-  const del = document.createElement('button'); del.innerHTML = ICONS.trash; del.title = tr('delete');
-  del.onclick = () => { window.api.removePassword(c.id); renderPasswords(); };
-  row.append(show, del);
-  return row;
-}
-
 // ---- small render helpers -------------------------------------------------
 // Right-aligned header holding a single "clear all/list" button.
 function clearHeader(labelKey, onClear) {
@@ -121,16 +80,23 @@ function clearHeader(labelKey, onClear) {
   head.append(clear);
   return head;
 }
-function listRow({ title, url, meta, onOpen, onRemove }) {
+// Shared skeleton for a `.list-item`: a `.main` wrapper holding a `.t` title line
+// and a `.u` subtitle line, already appended (`main` -> row). Callers fill `.u`
+// and add any trailing action buttons.
+function listItemBase(titleText) {
   const row = document.createElement('div'); row.className = 'list-item';
   const main = document.createElement('div'); main.className = 'main';
-  const t = document.createElement('div'); t.className = 't'; t.textContent = title || url;
-  const u = document.createElement('div'); u.className = 'u'; u.textContent = url;
-  main.append(t, u); main.onclick = onOpen;
+  const t = document.createElement('div'); t.className = 't'; t.textContent = titleText;
+  const u = document.createElement('div'); u.className = 'u';
+  main.append(t, u); row.append(main);
+  return { row, main, t, u };
+}
+function listRow({ title, url, meta, onOpen, onRemove }) {
+  const { row, main, u } = listItemBase(title || url);
+  u.textContent = url; main.onclick = onOpen;
   const m = document.createElement('div'); m.className = 'meta'; m.textContent = meta || '';
   const del = document.createElement('button'); del.innerHTML = ICONS.close; del.title = tr('delete'); del.onclick = onRemove;
-  row.append(main, m, del);
+  row.append(m, del);
   return row;
 }
 function emptyMsg(text) { const d = document.createElement('div'); d.className = 'empty'; d.textContent = text; return d; }
-function noteMsg(text) { const d = document.createElement('div'); d.className = 'note'; d.textContent = text; return d; }

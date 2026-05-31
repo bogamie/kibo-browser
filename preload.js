@@ -9,13 +9,18 @@ const on = (channel) => (cb) => ipcRenderer.on(channel, (_e, payload) => cb(payl
 contextBridge.exposeInMainWorld('api', {
   // tabs / navigation
   newTab: (url) => ipcRenderer.send('tab:new', url),
+  newBackgroundTab: (url) => ipcRenderer.send('tab:newBackground', url),
   newTabAt: (url, index) => ipcRenderer.send('tab:newAt', { url, index }),
   navigateTab: (id, url) => ipcRenderer.send('tab:navigate', { id, url }),
   closeTab: (id) => ipcRenderer.send('tab:close', id),
   selectTab: (id) => ipcRenderer.send('tab:select', id),
+  cycleTab: (dir) => ipcRenderer.send('tab:cycle', dir),
   go: (url) => ipcRenderer.send('nav:go', url),
   back: () => ipcRenderer.send('nav:back'),
+  backNewTab: () => ipcRenderer.send('nav:backNewTab'),
   forward: () => ipcRenderer.send('nav:forward'),
+  forwardNewTab: () => ipcRenderer.send('nav:forwardNewTab'),
+  resetZoom: () => ipcRenderer.send('zoom:reset'),
   reload: () => ipcRenderer.send('nav:reload'),
   stop: () => ipcRenderer.send('nav:stop'),
 
@@ -27,6 +32,7 @@ contextBridge.exposeInMainWorld('api', {
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSetting: (key, value) => ipcRenderer.send('settings:set', { key, value }),
   openSettings: () => ipcRenderer.send('settings:openTab'),
+  openPasswordsTab: () => ipcRenderer.send('passwords:openTab'),
 
   // bookmarks
   addBookmark: () => ipcRenderer.invoke('bookmark:add'),
@@ -51,10 +57,8 @@ contextBridge.exposeInMainWorld('api', {
   cancelDownload: (id) => ipcRenderer.send('downloads:cancel', id),
   clearDownloads: () => ipcRenderer.send('downloads:clear'),
 
-  // passwords
-  listPasswords: () => ipcRenderer.invoke('passwords:list'),
-  revealPassword: (id) => ipcRenderer.invoke('passwords:reveal', id),
-  removePassword: (id) => ipcRenderer.send('passwords:remove', id),
+  // passwords — the manager lives in the mybrowser://passwords tab (its own
+  // preload); the chrome only handles the save prompt.
   passwordDecision: (accept) => ipcRenderer.send('password:decision', accept),
 
   // find in page

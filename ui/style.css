@@ -5,7 +5,7 @@
   --bg3: #0d0d0e;       /* hairline borders / deepest */
   --fg: #e8e8ea;
   --muted: #8c8c92;
-  --accent: #5e84c2;    /* muted steel blue, used sparingly */
+  --accent: #bcbcc2;    /* muted light-grey highlight (selections, focus rings, primary buttons) */
   --active: #323236;    /* hover / active surface */
   --green: #7cc08a;
   --red: #d9697a;
@@ -55,7 +55,7 @@ body.incognito { --accent: #7d8590; }
    elements opt out so clicks/typing still work. */
 #tabsrow, #toolbar { -webkit-app-region: drag; }
 button, input, select, #omnibox, .tab, .bm, #menupop, #bmedit, #bmtree,
-#bmfolderpop, #bmctx, #panel, #interstitial, #findbar, #saveprompt { -webkit-app-region: no-drag; }
+#bmfolderpop, #bmoverflowpop, #bmctx, #panel, #interstitial, #findbar, #saveprompt { -webkit-app-region: no-drag; }
 /* During a bookmark drag, drop the window-move regions so the compositor's
    window-drag doesn't fight the HTML5 drag (which stuttered it over the tab/tool rows). */
 body.bm-dragging #tabsrow, body.bm-dragging #toolbar { -webkit-app-region: no-drag; }
@@ -134,7 +134,9 @@ body.popup-open #tabsrow, body.popup-open #toolbar { -webkit-app-region: no-drag
   border-radius: 10px;
   background: var(--bg2);
 }
-#omnibox:focus-within { border-color: var(--accent); }
+/* Highlight the outline only when the address field itself is focused — not when
+   a child button (zoom %, star) is clicked, which :focus-within would also catch. */
+#omnibox:has(#address:focus) { border-color: var(--accent); }
 #lock { display: inline-flex; align-items: center; color: var(--muted); margin-right: 6px; }
 #lock.insecure { color: var(--yellow); }
 #address {
@@ -155,6 +157,25 @@ body.popup-open #tabsrow, body.popup-open #toolbar { -webkit-app-region: no-drag
   cursor: pointer;
 }
 #star.on { color: var(--yellow); }
+/* Zoom badge: shows the current zoom % when it isn't 100; click to reset. */
+#zoom {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  margin: 0 4px 0 2px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 11px;
+  background: var(--active);
+  color: var(--fg);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: filter .12s;
+}
+#zoom:hover { filter: brightness(1.2); }  /* lighten the pill on hover (matches .mini) */
+#zoom[hidden] { display: none; }
 
 /* ---- bookmark bar --------------------------------------------------------*/
 #bookmarkbar {
@@ -163,11 +184,28 @@ body.popup-open #tabsrow, body.popup-open #toolbar { -webkit-app-region: no-drag
   gap: 4px;
   height: 30px;
   padding: 0 10px;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;   /* no horizontal scroll: chips that don't fit go to the » menu */
 }
 #bookmarkbar:empty { display: none; }
-#bookmarkbar::-webkit-scrollbar { display: none; }
+/* » overflow button: pinned to the far right, shown only when chips overflow. */
+.bm-overflow {
+  margin-left: auto;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  min-width: 24px;
+  padding: 0 4px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.bm-overflow:hover { background: var(--active); color: var(--fg); }
+.bm-overflow svg { width: 15px; height: 15px; }
+.bm-overflow[hidden] { display: none; }
 /* Flat: favicon + name, no box. A subtle hover tint is the only chrome. */
 .bm {
   display: inline-flex;
@@ -466,6 +504,25 @@ body.popup-open #tabsrow, body.popup-open #toolbar { -webkit-app-region: no-drag
 @keyframes bmpop-in { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes bmpop-out { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-4px); } }
 
+/* ---- bookmark overflow (») menu: same look as the folder dropdown --------*/
+#bmoverflowpop {
+  position: fixed;
+  min-width: 200px;
+  max-width: 320px;
+  background: var(--bg2);
+  border: 1px solid var(--active);
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
+  z-index: 25;
+}
+#bmoverflowpop[hidden] { display: none; }
+#bmoverflowpop:not([hidden]) { animation: bmpop-in .13s ease-out; }
+#bmoverflowpop .menuitem .ico { display: inline-flex; align-items: center; width: 16px; }
+#bmoverflowpop .menuitem .ico svg { width: 15px; height: 15px; }
+#bmoverflowpop .menuitem .ico .favicon { width: 15px; height: 15px; object-fit: contain; border-radius: 3px; }
+#bmoverflowpop .menuitem .arrow { margin-left: auto; color: var(--muted); }
+
 /* ---- bookmark right-click context menu ----------------------------------*/
 #bmctx {
   position: fixed;
@@ -481,6 +538,9 @@ body.popup-open #tabsrow, body.popup-open #toolbar { -webkit-app-region: no-drag
 #bmctx .menuitem.danger { color: var(--red); }
 #bmfolderpop .menuitem .arrow { margin-left: auto; color: var(--muted); }
 #bmfolderpop .menuitem.back { color: var(--muted); }
+/* Row whose right-click context menu is open: stays lit like hover, even while
+   the pointer is over the menu (cleared in closeCtx). */
+#bmfolderpop .menuitem.ctx-active { background: var(--active); }
 #bmfolderpop .menuitem .ico { display: inline-flex; align-items: center; width: 16px; }
 #bmfolderpop .menuitem .ico .favicon { width: 15px; height: 15px; object-fit: contain; border-radius: 3px; }
 #bmfolderpop .empty { padding: 8px 10px; color: var(--muted); font-size: 12px; border-radius: 6px; text-align: center; }
@@ -531,11 +591,11 @@ body.popup-open #tabsrow, body.popup-open #toolbar { -webkit-app-region: no-drag
 .switch { width: 44px; height: 24px; border-radius: 12px; background: var(--active); position: relative; cursor: pointer; transition: background .15s; }
 .switch.on { background: var(--accent); }
 .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left .15s; }
-.switch.on::after { left: 22px; }
+.switch.on::after { left: 22px; background: var(--bg); }  /* dark knob on the white ON track */
 /* Segmented language toggle (English / 한국어). */
 .langseg { display: inline-flex; flex: none; border-radius: 8px; background: var(--active); padding: 2px; gap: 2px; }
 .langopt { border: none; background: transparent; color: var(--muted); font-size: 13px; padding: 5px 12px; border-radius: 6px; cursor: pointer; }
-.langopt.on { background: var(--accent); color: #fff; }
+.langopt.on { background: var(--accent); color: #11111b; }
 .note { color: var(--yellow); font-size: 12px; padding: 12px 8px; }
 .section-title { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin: 16px 8px 6px; }
 

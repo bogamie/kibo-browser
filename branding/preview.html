@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kibo — 앱 아이콘 후보</title>
+<style>
+  :root { --ink:#141414; --mut:#6b6b6b; --line:#e7e7e3; --bg:#fbfbf9; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif;
+         color:var(--ink); background:var(--bg); -webkit-font-smoothing:antialiased; }
+  header { padding:56px 40px 28px; max-width:1080px; margin:0 auto; }
+  h1 { font-size:30px; font-weight:650; letter-spacing:-.02em; margin:0 0 6px; }
+  header p { margin:0; color:var(--mut); max-width:60ch; }
+  .wrap { max-width:1080px; margin:0 auto; padding:0 40px 80px; }
+  .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:22px; margin-top:8px; }
+  .card { border:1px solid var(--line); border-radius:18px; padding:24px; background:#fff; }
+  .card.rec { border-color:var(--ink); box-shadow:0 0 0 1px var(--ink); }
+  .top { display:flex; gap:22px; align-items:center; }
+  .hero { width:128px; height:128px; flex:0 0 auto; border-radius:28px; overflow:hidden; }
+  .hero img { width:100%; height:100%; display:block; }
+  .meta h2 { font-size:17px; margin:0 0 4px; font-weight:620; }
+  .meta .tag { display:inline-block; font-size:11px; letter-spacing:.04em; text-transform:uppercase;
+               color:var(--mut); border:1px solid var(--line); border-radius:999px; padding:2px 9px; margin-bottom:8px; }
+  .meta p { margin:0; color:#444; font-size:13.5px; }
+  .sizes { display:flex; align-items:flex-end; gap:18px; margin-top:20px; padding-top:18px; border-top:1px dashed var(--line); }
+  .sizes figure { margin:0; text-align:center; }
+  .sizes img { display:block; border-radius:22%; }
+  .sizes figcaption { font-size:10px; color:var(--mut); margin-top:5px; }
+  .s96 { width:96px; height:96px; } .s48 { width:48px; height:48px; }
+  .s32 { width:32px; height:32px; } .s24 { width:24px; height:24px; } .s16 { width:16px; height:16px; }
+  .file { margin-top:14px; font:12px/1 ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--mut); }
+  .variants { display:flex; gap:10px; margin-top:14px; }
+  .variants img { width:56px; height:56px; border-radius:14px; border:1px solid var(--line); }
+  .dark { margin-top:46px; background:#0f0f0f; border-radius:18px; padding:34px 24px; }
+  .dark h3 { color:#f2f2ef; font-size:14px; font-weight:560; margin:0 0 22px; text-align:center; letter-spacing:.02em; }
+  .darkrow { display:flex; justify-content:center; gap:40px; flex-wrap:wrap; }
+  .darkrow img { width:96px; height:96px; border-radius:21%; }
+  .note { margin-top:46px; border:1px solid var(--line); border-radius:18px; padding:26px 28px; background:#fff; }
+  .note h3 { margin:0 0 10px; font-size:16px; }
+  .note ul { margin:8px 0 0; padding-left:18px; color:#333; }
+  .note li { margin:4px 0; }
+  code { background:#f1f1ee; padding:1px 6px; border-radius:6px; font-size:12.5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Kibo — 앱 아이콘 후보</h1>
+  <p>전부 단색·모노라인 기조. 라이트 스퀘어클(둥근 사각형) 바탕에 잉크(#141414) 한 가지 색만 씁니다. 작은 크기에서도 형태가 살아남도록 stroke 굵게, 라운드 캡으로 잡았어요.</p>
+</header>
+
+<div class="wrap">
+  <div class="grid">
+
+    <!-- A -->
+    <div class="card rec">
+      <div class="top">
+        <div class="hero"><img src="icon-a-chevron-k.svg" alt="A"></div>
+        <div class="meta">
+          <span class="tag">A · 추천</span>
+          <h2>Chevron-K</h2>
+          <p>K 한 글자. 사선 두 개가 <b>&gt;(앞으로/탐색)</b> 화살표처럼 읽혀 "브라우저"라는 의미도 은근히 담깁니다. 가장 군더더기 없는 안.</p>
+        </div>
+      </div>
+      <div class="sizes">
+        <figure><img class="s96" src="icon-a-chevron-k.svg"><figcaption>96</figcaption></figure>
+        <figure><img class="s48" src="icon-a-chevron-k.svg"><figcaption>48</figcaption></figure>
+        <figure><img class="s32" src="icon-a-chevron-k.svg"><figcaption>32</figcaption></figure>
+        <figure><img class="s16" src="icon-a-chevron-k.svg"><figcaption>16</figcaption></figure>
+      </div>
+      <div class="variants">
+        <img src="icon-a-chevron-k.svg" title="light">
+        <img src="icon-a-chevron-k-dark.svg" title="dark">
+      </div>
+      <div class="file">icon-a-chevron-k.svg · icon-a-chevron-k-dark.svg</div>
+    </div>
+
+    <!-- B -->
+    <div class="card">
+      <div class="top">
+        <div class="hero"><img src="icon-b-giyeok.svg" alt="B"></div>
+        <div class="meta">
+          <span class="tag">B · 한글</span>
+          <h2>ㄱ (기역)</h2>
+          <p>김보겸의 <b>ㄱ</b>, Kibo의 <b>K</b> 소리. 획 단 하나로 끝나는 최소 형태 — 의미와 미니멀이 동시에. 가장 "개인 브랜드"다운 안.</p>
+        </div>
+      </div>
+      <div class="sizes">
+        <figure><img class="s96" src="icon-b-giyeok.svg"><figcaption>96</figcaption></figure>
+        <figure><img class="s48" src="icon-b-giyeok.svg"><figcaption>48</figcaption></figure>
+        <figure><img class="s32" src="icon-b-giyeok.svg"><figcaption>32</figcaption></figure>
+        <figure><img class="s16" src="icon-b-giyeok.svg"><figcaption>16</figcaption></figure>
+      </div>
+      <div class="file">icon-b-giyeok.svg</div>
+    </div>
+
+    <!-- C -->
+    <div class="card">
+      <div class="top">
+        <div class="hero"><img src="icon-c-knockout-k.svg" alt="C"></div>
+        <div class="meta">
+          <span class="tag">C · 임팩트</span>
+          <h2>Knockout-K</h2>
+          <p>꽉 찬 잉크 바탕에서 K를 <b>파내(투명)</b> 배경이 비치는 방식. 도크/작업표시줄에서 존재감이 가장 크고, 어디 얹어도 자연스러움.</p>
+        </div>
+      </div>
+      <div class="sizes">
+        <figure><img class="s96" src="icon-c-knockout-k.svg"><figcaption>96</figcaption></figure>
+        <figure><img class="s48" src="icon-c-knockout-k.svg"><figcaption>48</figcaption></figure>
+        <figure><img class="s32" src="icon-c-knockout-k.svg"><figcaption>32</figcaption></figure>
+        <figure><img class="s16" src="icon-c-knockout-k.svg"><figcaption>16</figcaption></figure>
+      </div>
+      <div class="variants">
+        <img src="icon-c-knockout-k.svg" title="ink">
+        <img src="icon-c-knockout-k-indigo.svg" title="indigo">
+      </div>
+      <div class="file">icon-c-knockout-k.svg · icon-c-knockout-k-indigo.svg</div>
+    </div>
+
+    <!-- D -->
+    <div class="card">
+      <div class="top">
+        <div class="hero"><img src="icon-d-orbit-k.svg" alt="D"></div>
+        <div class="meta">
+          <span class="tag">D · 웹</span>
+          <h2>Orbit-K</h2>
+          <p>얇은 링(지구본/웹) 안에 K. "브라우저"라는 정체성을 가장 직접적으로 보여주는 안. 후보 중 요소가 하나 더 많아 살짝 덜 미니멀.</p>
+        </div>
+      </div>
+      <div class="sizes">
+        <figure><img class="s96" src="icon-d-orbit-k.svg"><figcaption>96</figcaption></figure>
+        <figure><img class="s48" src="icon-d-orbit-k.svg"><figcaption>48</figcaption></figure>
+        <figure><img class="s32" src="icon-d-orbit-k.svg"><figcaption>32</figcaption></figure>
+        <figure><img class="s16" src="icon-d-orbit-k.svg"><figcaption>16</figcaption></figure>
+      </div>
+      <div class="file">icon-d-orbit-k.svg</div>
+    </div>
+
+  </div>
+
+  <div class="dark">
+    <h3>다크 배경 / 도크 미리보기</h3>
+    <div class="darkrow">
+      <img src="icon-a-chevron-k-dark.svg" title="A dark">
+      <img src="icon-b-giyeok.svg" title="B">
+      <img src="icon-c-knockout-k.svg" title="C ink — 배경 비침">
+      <img src="icon-c-knockout-k-indigo.svg" title="C indigo">
+      <img src="icon-d-orbit-k.svg" title="D">
+    </div>
+  </div>
+
+  <div class="note">
+    <h3>내 추천</h3>
+    <p><b>A (Chevron-K)</b>를 메인으로, 도크에서 강하게 보이고 싶으면 <b>C (Knockout-K)</b>. 개인 브랜드 색을 더 내고 싶으면 <b>B (ㄱ)</b>. 셋 다 같은 K 비율을 공유해서 나중에 섞어 써도 통일감이 있어요.</p>
+    <h3 style="margin-top:18px">고르면 바로 할 수 있는 것</h3>
+    <ul>
+      <li>선택안을 <code>512 / 256 / 128 / 64 / 32 px</code> PNG로 렌더 (Linux <code>.desktop</code> 아이콘용)</li>
+      <li>패키징용 <code>.ico</code>(Windows) / <code>.icns</code>(macOS) 멀티사이즈 번들 생성</li>
+      <li><code>package.json</code> <code>productName: "Kibo"</code> 등 배포 메타 정리 + electron-builder/forge 설정</li>
+      <li>브라우저 안의 about 화면·기본 탭 로고로도 재사용</li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>

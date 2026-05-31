@@ -15,6 +15,7 @@ const bookmarkbar = $('#bookmarkbar');
 const backBtn = $('#back');
 const fwdBtn = $('#forward');
 const star = $('#star');
+const zoomBtn = $('#zoom');
 const lock = $('#lock');
 const shield = $('#shield');
 const shieldcount = $('#shieldcount');
@@ -22,6 +23,7 @@ const menupop = $('#menupop');
 const bmedit = $('#bmedit');
 const bmtree = $('#bmtree');
 const bmfolderpop = $('#bmfolderpop');
+const bmoverflowpop = $('#bmoverflowpop');
 const bmctx = $('#bmctx');
 const panel = $('#panel');
 const panelTitle = $('#paneltitle');
@@ -158,7 +160,8 @@ function notImplemented() { showToast(tr('notImplemented')); }
 // ---------------------------------------------------------------------------
 function overlayOpen() {
   return bmDragActive || !menupop.hidden || !panel.hidden || !interstitial.hidden
-      || !bmedit.hidden || !bmtree.hidden || !bmfolderpop.hidden || !bmctx.hidden || _toastVisible;
+      || !bmedit.hidden || !bmtree.hidden || !bmfolderpop.hidden || !bmoverflowpop.hidden
+      || !bmctx.hidden || _toastVisible;
 }
 // A transient popup that an outside-click should dismiss. While one is open we
 // drop the window-move regions to no-drag (see .popup-open) so a click on the

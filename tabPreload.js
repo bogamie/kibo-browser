@@ -39,6 +39,36 @@ window.addEventListener('mousemove', reportEdge, { passive: true, capture: true 
 // Also reveal when the pointer re-enters the page from the top edge.
 window.addEventListener('mouseenter', reportEdge, { passive: true, capture: true });
 
+// ---- middle-click autoscroll (pan) ----------------------------------------
+// Capture on window so we engage before the page's own handlers. The shared
+// core decides whether to start (skips links / editable fields / non-scrollable
+// targets) and owns the anchor + scroll loop; only the wiring lives here.
+window.addEventListener('mousedown', (e) => { if (e.button === 1) C.autoScroll(e); }, true);
+
+// ---- Shift + wheel → horizontal scroll ------------------------------------
+// Translate a vertical wheel into horizontal scroll while Shift is held. This
+// must be a NON-passive listener (it calls preventDefault to suppress the
+// browser's default vertical scroll), so it bails on the very first line for the
+// overwhelmingly common no-Shift wheel — keeping normal scrolling on the
+// compositor fast path. Only engages when an ancestor actually scrolls
+// horizontally; otherwise it leaves the event alone.
+function findHScroller(el) {
+  for (let n = el; n && n.nodeType === 1 && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+    const cs = getComputedStyle(n);
+    if ((cs.overflowX === 'auto' || cs.overflowX === 'scroll') && n.scrollWidth - n.clientWidth > 1) return n;
+  }
+  const de = document.scrollingElement || document.documentElement;
+  return de && de.scrollWidth - de.clientWidth > 1 ? de : null;
+}
+window.addEventListener('wheel', (e) => {
+  if (!e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
+  if (e.deltaX !== 0) return;            // already a horizontal wheel (trackpad) — leave it
+  const sc = findHScroller(e.target);
+  if (!sc) return;
+  e.preventDefault();
+  sc.scrollLeft += e.deltaY;
+}, { capture: true, passive: false });
+
 // ---- thin overlay scrollbars (ALL scroll areas on the page) ---------------
 // Hide every native scrollbar (no reserved gutter → content never shifts) and
 // draw our own thin indicator over whatever is being scrolled — the main page OR
@@ -238,8 +268,19 @@ window.addEventListener('mouseout', (e) => { if (!e.relatedTarget) sbClearHover(
 window.addEventListener('blur', sbClearHover, { passive: true });
 
 // ---- password manager helpers ---------------------------------------------
+// Is the element actually visible & interactable? Used to refuse autofill/capture
+// on hidden or zero-size password fields — a page can stage those to harvest a
+// silently-filled credential.
+function isVisible(el) {
+  if (!el || el.type === 'hidden') return false;
+  const r = el.getBoundingClientRect();
+  if (r.width < 2 || r.height < 2) return false;
+  const s = getComputedStyle(el);
+  return s.visibility !== 'hidden' && s.display !== 'none' && Number(s.opacity) !== 0;
+}
+
 function passwordFields() {
-  return [...document.querySelectorAll('input[type="password"]')].filter((el) => el.offsetParent !== null || el.type === 'password');
+  return [...document.querySelectorAll('input[type="password"]')].filter(isVisible);
 }
 
 // Find the username field most likely paired with a given password field:
@@ -288,29 +329,261 @@ document.addEventListener(
   true,
 );
 
-// ---- 3. Autofill on load --------------------------------------------------
-async function autofill() {
-  let creds;
-  try { creds = await ipcRenderer.invoke('passwords:get', location.origin); } catch { return; }
-  if (!creds || !creds.length) return;
-  const pw = passwordFields()[0];
-  if (!pw) return;
-  const cred = creds[0]; // most recent
-  const userEl = usernameFor(pw);
-  const setVal = (el, v) => {
-    if (!el || v == null) return;
-    const proto = Object.getPrototypeOf(el);
-    const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-    setter ? setter.call(el, v) : (el.value = v);
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
-  };
+// ---- 3. Autofill on load (+ SPA late-render retry) ------------------------
+let CREDS = null;          // saved credentials for this origin (fetched once)
+let lastFilledPw = null;   // the password field we already auto-filled
+let lastFilledUser = null; // the standalone username field we already filled
+
+async function getCreds() {
+  if (CREDS) return CREDS;
+  try { CREDS = await ipcRenderer.invoke('passwords:get', location.origin); }
+  catch { CREDS = []; }
+  return (CREDS = CREDS || []);
+}
+
+// Localized picker labels — the content world has no access to ui/i18n.js, so
+// main returns them (see the passwords:labels handler).
+let LABELS = null;
+async function getLabels() {
+  if (LABELS) return LABELS;
+  try { LABELS = await ipcRenderer.invoke('passwords:labels'); }
+  catch { LABELS = null; }
+  return LABELS;
+}
+
+// Write a value the way a real keystroke would: go through the native setter so
+// React/Vue's value tracker notices, then fire input+change.
+function setVal(el, v) {
+  if (!el || v == null) return;
+  const proto = Object.getPrototypeOf(el);
+  const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+  setter ? setter.call(el, v) : (el.value = v);
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function fillFields(userEl, pwEl, cred) {
   if (userEl && cred.username) setVal(userEl, cred.username);
-  setVal(pw, cred.password);
+  if (pwEl) setVal(pwEl, cred.password);
+}
+
+// A username/email field NOT paired with a password field on this page — i.e. an
+// identifier-first login step (Google asks for the email first, then the password
+// on the next page). Strong login signals only, so we don't grab a random
+// email/search box.
+function standaloneUsernameField() {
+  const sel = 'input[autocomplete="username"],input[autocomplete="email"],input[type="email"],' +
+    'input[name*="user" i],input[name*="email" i],input[id*="identifier" i],input[name*="login" i]';
+  return [...document.querySelectorAll(sel)].filter(isVisible)[0] || null;
+}
+
+// The identifier (email/username) already entered on the page, read from any
+// username/email input — INCLUDING hidden ones, since identifier-first flows
+// (Google) carry the chosen email in a hidden field on the password step. Empty
+// string when nothing has been entered yet.
+function currentIdentifier() {
+  const sel = 'input[autocomplete="username"],input[type="email"],' +
+    'input[name*="identifier" i],input[name*="user" i],input[name*="email" i]';
+  for (const el of document.querySelectorAll(sel)) {
+    const v = (el.value || '').trim();
+    if (v) return v;
+  }
+  return '';
+}
+
+function credFor(identifier) {
+  const id = identifier.trim().toLowerCase();
+  return (CREDS || []).find((c) => (c.username || '').trim().toLowerCase() === id) || null;
+}
+
+// An email shown as plain text on the page. Identifier-first password steps often
+// render the chosen account as a chip/header rather than an input; reading it lets
+// us refuse to fill a saved password when an UNSAVED account is selected. Used
+// only as a fallback on password-only pages (see autofill).
+function shownEmail() {
+  const m = (document.body?.innerText || '').match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return m ? m[0] : '';
+}
+
+// Set up autofill for the first visible login form. Handles both single-page
+// forms and identifier-first flows (username now, password on the next page).
+// Returns true only once the PASSWORD field has been handled, so the SPA observer
+// keeps watching after a username-only step. The dangerous case — filling a
+// hidden or iframed form staged to harvest the secret — is blocked by isVisible()
+// and the top-frame guard in startAutofill().
+function autofill() {
+  const creds = CREDS || [];
+  if (!creds.length) return false;
+  const pw = passwordFields()[0];
+  const userEl = pw ? usernameFor(pw) : standaloneUsernameField();
+  if (pw) { if (pw === lastFilledPw) return false; lastFilledPw = pw; }
+  else if (userEl) { if (userEl === lastFilledUser) return false; lastFilledUser = userEl; }
+  else return false;
+
+  // Figure out which account is in play. Prefer a real input value; on a
+  // password-only step (identifier-first, no editable username field) fall back to
+  // an email shown on the page. If an identifier is known, fill ONLY for the
+  // matching saved account — never a saved password under a different, unsaved
+  // email.
+  // Always offer the account chooser on click/focus — for a single account too.
+  attachPicker(userEl, pw, creds);
+
+  let typed = currentIdentifier();
+  if (!typed && pw && !userEl) typed = shownEmail();
+  if (typed) {
+    const match = credFor(typed);
+    if (match) fillFields(userEl, pw, match);
+    return !!pw; // matched → filled; otherwise intentionally nothing
+  }
+
+  // Nothing entered yet: a single saved account fills on load; multiple accounts
+  // wait for an explicit pick from the chooser.
+  if (creds.length === 1) fillFields(userEl, pw, creds[0]);
+  return !!pw;
+}
+
+// ---- 1. Account picker ----------------------------------------------------
+// Focusing/clicking a login field surfaces a Chrome-style chooser (saved
+// account(s) + "Manage passwords"), even with a single saved account. It lives
+// in a closed shadow root attached to <html>, so the page's CSS/JS can neither
+// style nor read it — consistent with this preload exposing nothing to the page.
+let pickerHost = null;
+let pickerAnchors = [];   // login fields that toggle the picker (don't self-dismiss)
+let pickerOpenFor = null; // the field the picker is currently open under
+function removePicker() {
+  const host = pickerHost;
+  pickerHost = null;
+  pickerOpenFor = null; // treat as closed at once, so a re-open during the fade is clean
+  if (!host) return;
+  if (!host.animate || matchMedia('(prefers-reduced-motion:reduce)').matches) { host.remove(); return; }
+  // Fade + slide up, then remove (the reverse of the open animation).
+  const anim = host.animate(
+    [{ opacity: 1, transform: 'translateY(0)' }, { opacity: 0, transform: 'translateY(-4px)' }],
+    { duration: 100, easing: 'ease-in' },
+  );
+  anim.onfinish = anim.oncancel = () => host.remove();
+}
+
+function attachPicker(userEl, pwEl, creds) {
+  if (!creds || !creds.length) return;
+  pickerAnchors = [pwEl, userEl].filter(Boolean);
+  for (const a of pickerAnchors) {
+    // Click toggles the chooser: open under this field; click the same field
+    // again to close. (No focus-open, so it only appears on an explicit click.)
+    a.addEventListener('mousedown', () => {
+      if (pickerHost && pickerOpenFor === a) removePicker();
+      else { showPicker(a, userEl, pwEl, creds); pickerOpenFor = a; }
+    });
+  }
+}
+
+// No width/height attrs — sized by `.ico svg` in the picker CSS (per project
+// convention; the SVG size attribute would otherwise override CSS).
+const KEY_SVG = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="10" r="3"/><path d="M8 8l5-5M11 5l1.5 1.5"/></svg>';
+
+// The site's favicon (declared <link>, else the conventional /favicon.ico),
+// shown in each row like Chrome. Falls back to a key glyph if it fails to load.
+function faviconUrl() {
+  const link = document.querySelector('link[rel~="icon"],link[rel="shortcut icon"],link[rel="apple-touch-icon"]');
+  if (link && link.href) return link.href;
+  try { return location.origin + '/favicon.ico'; } catch { return ''; }
+}
+function makeFavicon() {
+  const box = document.createElement('span'); box.className = 'ico';
+  const url = faviconUrl();
+  if (url) {
+    const img = document.createElement('img');
+    img.referrerPolicy = 'no-referrer';
+    img.onerror = () => { box.innerHTML = KEY_SVG; };
+    img.src = url;
+    box.append(img);
+  } else { box.innerHTML = KEY_SVG; }
+  return box;
+}
+
+function showPicker(anchor, userEl, pwEl, creds) {
+  removePicker();
+  const labels = LABELS || { fromThisSite: 'From this website', manage: 'Manage Passwords' };
+  const rect = anchor.getBoundingClientRect();
+  pickerHost = document.createElement('div');
+  Object.assign(pickerHost.style, {
+    position: 'fixed', left: rect.left + 'px', top: (rect.bottom + 2) + 'px',
+    width: Math.max(rect.width, 260) + 'px', zIndex: '2147483647',
+  });
+  const root = pickerHost.attachShadow({ mode: 'closed' });
+  const style = document.createElement('style');
+  style.textContent =
+    '*{box-sizing:border-box}' +
+    '@keyframes mbpop{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}' +
+    '.menu{font:13px/1.45 system-ui,-apple-system,sans-serif;background:#292a2d;color:#e3e3e3;' +
+    'border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.5);overflow:hidden;padding:4px 0;' +
+    'transform-origin:top;animation:mbpop .12s ease-out}' +
+    '@media(prefers-reduced-motion:reduce){.menu{animation:none}}' +
+    '.row{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer}' +
+    '.row:hover{background:#3c3d40}' +
+    '.ico{width:16px;height:16px;flex:0 0 16px;display:flex;align-items:center;justify-content:center;color:#9aa0a6}' +
+    '.ico img{width:16px;height:16px;border-radius:3px;object-fit:contain}' +
+    '.ico svg{width:14px;height:14px}' +
+    '.txt{min-width:0}' +
+    '.u{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+    '.sub{font-size:12px;color:#9aa0a6}' +
+    '.sep{height:1px;background:#3c3d40;margin:4px 0}' +
+    '.manage{padding:10px 14px;cursor:pointer}.manage:hover{background:#3c3d40}';
+  const menu = document.createElement('div'); menu.className = 'menu';
+
+  for (const c of creds) {
+    const row = document.createElement('div'); row.className = 'row';
+    const txt = document.createElement('div'); txt.className = 'txt';
+    const u = document.createElement('div'); u.className = 'u'; u.textContent = c.username || '(no username)';
+    const sub = document.createElement('div'); sub.className = 'sub'; sub.textContent = labels.fromThisSite;
+    txt.append(u, sub);
+    row.append(makeFavicon(), txt);
+    // mousedown + preventDefault: fill before the field blurs / page handlers run.
+    row.addEventListener('mousedown', (e) => { e.preventDefault(); fillFields(userEl, pwEl, c); removePicker(); });
+    menu.append(row);
+  }
+
+  const sep = document.createElement('div'); sep.className = 'sep';
+  const manage = document.createElement('div'); manage.className = 'manage'; manage.textContent = labels.manage;
+  manage.addEventListener('mousedown', (e) => { e.preventDefault(); ipcRenderer.send('ui:openPasswords'); removePicker(); });
+  menu.append(sep, manage);
+
+  root.append(style, menu);
+  document.documentElement.append(pickerHost);
+}
+
+// Dismiss on an outside mousedown — but NOT on a toggle anchor (its own handler
+// closes it) and NOT inside the menu.
+document.addEventListener('mousedown', (e) => {
+  if (!pickerHost) return;
+  if (pickerHost.contains(e.target) || pickerAnchors.includes(e.target)) return;
+  removePicker();
+}, true);
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape') removePicker(); }, true);
+window.addEventListener('scroll', removePicker, { capture: true, passive: true });
+window.addEventListener('resize', removePicker, { passive: true });
+
+// Many login pages (SPAs) mount the form after first paint. Fill once now, and
+// if there's nothing to fill yet, watch the DOM until the form shows up — with a
+// hard time cap so we don't observe forever.
+function watchForForms() {
+  if (!('MutationObserver' in window)) return;
+  const obs = new MutationObserver(() => { if (autofill()) obs.disconnect(); });
+  obs.observe(document.documentElement, { childList: true, subtree: true });
+  setTimeout(() => obs.disconnect(), 15000);
+}
+
+async function startAutofill() {
+  if (window.top !== window.self) return; // never autofill inside iframes
+  const creds = await getCreds();
+  if (!creds.length) return;       // nothing saved → don't fill or observe
+  getLabels();                     // warm the localized picker labels
+  if (autofill()) return;          // form already present
+  watchForForms();                 // SPA: wait for it
 }
 
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => setTimeout(autofill, 150));
+  document.addEventListener('DOMContentLoaded', () => setTimeout(startAutofill, 150));
 } else {
-  setTimeout(autofill, 150);
+  setTimeout(startAutofill, 150);
 }

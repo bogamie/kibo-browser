@@ -58,9 +58,13 @@ window.api.onMaximized((on) => {
 
 backBtn.onclick = () => window.api.back();
 fwdBtn.onclick = () => window.api.forward();
+// Middle-click back/forward opens the previous/next history entry in a new tab.
+backBtn.addEventListener('auxclick', (e) => { if (e.button === 1) { e.preventDefault(); window.api.backNewTab(); } });
+fwdBtn.addEventListener('auxclick', (e) => { if (e.button === 1) { e.preventDefault(); window.api.forwardNewTab(); } });
 $('#reload').onclick = () => window.api.reload();
 $('#newtab').onclick = () => window.api.newTab();
 star.onclick = () => addBookmarkAndEdit();
+zoomBtn.onclick = () => window.api.resetZoom();
 shield.onclick = () => window.api.setSetting('blockAds', !state.settings.blockAds);
 $('#menu').onclick = (e) => { e.stopPropagation(); toggleMenu(); };
 
@@ -95,7 +99,6 @@ window.api.onState((s) => {
   // Keep open bookmark popups in sync with fresh data (e.g. folder just added).
   if (!bmedit.hidden && bmEditId != null) syncBookmarkEditor();
   if (!bmfolderpop.hidden && bmFolderId != null) renderFolderPop(bmFolderId, null);
-  if (!panel.hidden && panel.dataset.kind === 'passwords') openPanel('passwords');
 });
 
 // ---------------------------------------------------------------------------
@@ -111,7 +114,7 @@ const MENU = [
   ['menu_addBookmark', 'Ctrl+D', () => addBookmarkAndEdit()],
   ['menu_history', 'Ctrl+H', () => openPanel('history')],
   ['menu_downloads', 'Ctrl+J', () => openPanel('downloads')],
-  ['menu_passwords', '', () => openPanel('passwords')],
+  ['menu_passwords', '', () => window.api.openPasswordsTab()],
   ['menu_find', 'Ctrl+F', () => openFind()],
   ['sep'],
   ['menu_settings', '', () => window.api.openSettings()],
@@ -147,8 +150,9 @@ document.addEventListener('click', (e) => {
 // ---------------------------------------------------------------------------
 // Password save prompt
 // ---------------------------------------------------------------------------
-window.api.onPasswordPrompt(({ origin, username }) => {
-  savetext.textContent = tr('save_prompt', origin, username);
+window.api.onPasswordPrompt(({ origin, username, update }) => {
+  savetext.textContent = tr(update ? 'update_prompt' : 'save_prompt', origin, username);
+  $('#savaccept').textContent = tr(update ? 'update_accept' : 'save_accept');
   saveprompt.hidden = false;
   reportLayout();
 });

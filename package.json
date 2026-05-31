@@ -1,17 +1,54 @@
 {
-  "name": "mybrowser",
+  "name": "kibo",
   "version": "0.1.0",
-  "description": "My own hardened Chromium-based web browser",
+  "description": "Kibo — a hardened Chromium-based web browser",
   "main": "main.js",
   "scripts": {
     "build": "node build.js",
     "watch": "node build.js --watch",
-    "start": "npm run build && electron ."
+    "start": "npm run build && electron .",
+    "dist": "npm run build && electron-builder",
+    "release": "npm run build && electron-builder --publish always"
   },
   "author": "bogamie",
   "license": "MIT",
+  "build": {
+    "appId": "io.github.bogamie.kibo",
+    "productName": "Kibo",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "settingsPreload.js",
+      "passwordsPreload.js",
+      "store.js",
+      "passwords.js",
+      "blocker.js",
+      "dist/**/*",
+      "ui/**/*",
+      "package.json"
+    ],
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Network",
+      "icon": "build/icons"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "bogamie",
+      "repo": "kibo-browser"
+    }
+  },
   "devDependencies": {
     "electron": "^42.0.0",
+    "electron-builder": "^26.8.1",
     "esbuild": "^0.28.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
   }
 }

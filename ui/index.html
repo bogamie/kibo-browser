@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src data: https: http:;" />
-  <title>MyBrowser</title>
+  <title>Kibo</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -50,6 +50,7 @@
         </span>
         <input id="address" type="text" spellcheck="false"
                placeholder="Search or enter address (Ctrl+L)" data-i18n-ph="url_placeholder" />
+        <button id="zoom" hidden title="Reset zoom" data-i18n-title="zoom_reset"></button>
         <button id="star" title="Bookmark (Ctrl+D)" data-i18n-title="star_title">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M8 1.7l1.9 3.96 4.35.63-3.15 3.07.74 4.32L8 11.65 4.31 13.75l.74-4.32L1.9 6.36l4.35-.63z"/></svg>
         </button>
@@ -116,10 +117,13 @@
   <!-- Bookmark-bar folder dropdown (navigates into nested folders in place) -->
   <div id="bmfolderpop" hidden></div>
 
+  <!-- Bookmark-bar overflow (») menu: chips that don't fit the bar -->
+  <div id="bmoverflowpop" hidden></div>
+
   <!-- Right-click context menu for bookmark-bar items -->
   <div id="bmctx" hidden></div>
 
-  <!-- Full-window overlay panels (history / downloads / passwords; settings is a tab) -->
+  <!-- Full-window overlay panels (history / downloads; settings and passwords are tabs) -->
   <div id="panel" hidden>
     <div id="panelhead">
       <span id="paneltitle"></span>

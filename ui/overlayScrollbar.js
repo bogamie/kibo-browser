@@ -129,3 +129,9 @@ function overlayScrollbar(target) {
   }
   window.addEventListener('load', () => schedule(), { capture: true, passive: true });
 }
+
+// Middle-click autoscroll for the chrome's own scrollable surfaces (panels,
+// settings, the folder dialog). Wired once per page — the shared core finds the
+// scroller under the press and no-ops when nothing scrolls there (e.g. a
+// middle-click on the toolbar or a tab, leaving those handlers untouched).
+window.addEventListener('mousedown', (e) => { if (e.button === 1) ScrollbarCore.autoScroll(e); }, true);
