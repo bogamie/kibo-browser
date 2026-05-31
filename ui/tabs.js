@@ -8,20 +8,8 @@
 // fully rebuilds on every loading-spinner / title tick, repainting constantly).
 const tabEls = new Map(); // id -> { el, dot, title }
 
-// Inline onerror is blocked by CSP, so we catch <img> load/error in the capture
-// phase and update the shared faviconFail map (defined in dom.js): a failure is
-// a strike, a successful load clears the URL so a recovered icon shows again.
-tabstrip.addEventListener('error', (e) => {
-  const img = e.target;
-  if (!img || img.tagName !== 'IMG') return;
-  faviconStrike(img.dataset.fav);
-  const dot = img.closest('.dot');
-  if (dot) { dot._html = DOT; dot.innerHTML = DOT; } // swap to dot immediately
-}, true);
-tabstrip.addEventListener('load', (e) => {
-  const img = e.target;
-  if (img && img.tagName === 'IMG') faviconOk(img.dataset.fav);
-}, true);
+// A failed favicon falls back to the security dot (helper in dom.js).
+wireFaviconFallback(tabstrip, '.dot', DOT);
 
 function makeTabEl(id) {
   const el = document.createElement('div');
@@ -49,13 +37,13 @@ window.api.onTabs((tabs) => {
     const rec = tabEls.get(t.id) || makeTabEl(t.id);
     const internal = t.internal;        // 'settings' for the internal Settings tab
     setClass(rec.el, 'tab' + (t.active ? ' active' : ''));
-    const fav = t.favicon && !faviconBlocked(t.favicon) ? t.favicon : null;
+    const fav = pickFavicon(t.favicon);
     setClass(rec.dot, 'dot' + (t.secure ? '' : ' insecure') + (t.loading ? ' loading' : ''));
     // Favicon when we have one; spinner while loading; security dot as fallback.
     // Internal pages get their own glyph (a gear) instead of a site favicon.
     if (t.loading) setHTML(rec.dot, SPINNER);
     else if (internal === 'settings') setHTML(rec.dot, ICONS.gear);
-    else if (fav) setHTML(rec.dot, `<img class="favicon" src="${encodeURI(fav)}" data-fav="${fav.replace(/"/g, '%22')}" />`);
+    else if (fav) setHTML(rec.dot, faviconImg(fav));
     else setHTML(rec.dot, DOT);
     setText(rec.title, t.title || (internal === 'settings' ? tr('panel_settings') : tr('tab_default')));
     // Keep DOM order in sync without rebuilding when it already matches.

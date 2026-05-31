@@ -33,10 +33,8 @@ function makeBookmarkChip(b) {
   el.title = b.title || b.url;
   const ico = document.createElement('span');
   ico.className = 'fico';
-  const fav = b.favicon && !faviconBlocked(b.favicon) ? b.favicon : null;
-  ico.innerHTML = fav
-    ? `<img class="favicon" draggable="false" src="${encodeURI(fav)}" data-fav="${fav.replace(/"/g, '%22')}" />`
-    : ICONS.globe;
+  const fav = pickFavicon(b.favicon);
+  ico.innerHTML = fav ? faviconImg(fav, { draggable: false }) : ICONS.globe;
   const t = document.createElement('span');
   t.className = 'lbl';
   t.textContent = b.title || b.url;
@@ -47,33 +45,10 @@ function makeBookmarkChip(b) {
   return el;
 }
 
-// Bookmark favicons that fail to load fall back to the globe icon (mirrors the
-// tab-strip handler; inline onerror is blocked by CSP). A success clears the
-// strike count so a recovered icon shows again on the next render.
-bookmarkbar.addEventListener('error', (e) => {
-  const img = e.target;
-  if (!img || img.tagName !== 'IMG') return;
-  faviconStrike(img.dataset.fav);
-  const slot = img.closest('.fico');
-  if (slot) slot.innerHTML = ICONS.globe;
-}, true);
-bookmarkbar.addEventListener('load', (e) => {
-  const img = e.target;
-  if (img && img.tagName === 'IMG') faviconOk(img.dataset.fav);
-}, true);
-
-// Same favicon fallback for bookmarks shown inside a folder dropdown.
-bmfolderpop.addEventListener('error', (e) => {
-  const img = e.target;
-  if (!img || img.tagName !== 'IMG') return;
-  faviconStrike(img.dataset.fav);
-  const slot = img.closest('.ico');
-  if (slot) slot.innerHTML = ICONS.globe;
-}, true);
-bmfolderpop.addEventListener('load', (e) => {
-  const img = e.target;
-  if (img && img.tagName === 'IMG') faviconOk(img.dataset.fav);
-}, true);
+// Bookmark favicons that fail to load fall back to the globe icon — on the bar
+// itself and inside the folder dropdown (helper in dom.js).
+wireFaviconFallback(bookmarkbar, '.fico', ICONS.globe);
+wireFaviconFallback(bmfolderpop, '.ico', ICONS.globe);
 
 function makeFolderChip(f) {
   const el = document.createElement('div');
@@ -190,9 +165,9 @@ function bmDragPreview(kind, item) {
   el.className = kind === 'folder' ? 'bm folder' : 'bm';
   const ico = document.createElement('span');
   ico.className = 'fico';
-  const fav = kind !== 'folder' && item.favicon && !faviconBlocked(item.favicon) ? item.favicon : null;
+  const fav = pickFavicon(item.favicon);
   ico.innerHTML = kind === 'folder' ? ICONS.folder
-    : (fav ? `<img class="favicon" draggable="false" src="${encodeURI(fav)}" />` : ICONS.globe);
+    : (fav ? faviconImg(fav, { draggable: false }) : ICONS.globe);
   const t = document.createElement('span');
   t.className = 'lbl';
   t.textContent = item.title || item.url || '';
@@ -844,9 +819,9 @@ function renderFolderPop(folderId, anchor) {
       row = mkItem('', `<span class="ico">${ICONS.folder}</span><span>${escapeHtml(item.title)}</span><span class="arrow">›</span>`,
         () => renderFolderPop(item.id, anchor));
     } else {
-      const fav = item.favicon && !faviconBlocked(item.favicon) ? item.favicon : null;
+      const fav = pickFavicon(item.favicon);
       const ico = fav
-        ? `<span class="ico"><img class="favicon" draggable="false" src="${encodeURI(fav)}" data-fav="${fav.replace(/"/g, '%22')}" /></span>`
+        ? `<span class="ico">${faviconImg(fav, { draggable: false })}</span>`
         : `<span class="ico">${ICONS.globe}</span>`;
       row = mkItem('', `${ico}<span>${escapeHtml(item.title || item.url)}</span>`,
         () => { window.api.go(item.url); closeFolderPop(); });

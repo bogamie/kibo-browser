@@ -68,13 +68,39 @@ let bmDragActive = false; // a bookmark-bar chip is being dragged (cover full wi
 // re-fetches favicons over the default session (no page cookies/referer, cold
 // cache), so a single transient miss shouldn't blacklist a good icon for the
 // rest of the session. A successful load clears the count. Inline onerror is
-// blocked by CSP, so we catch <img> load/error in the capture phase (see the
-// listeners in tabs.js / bookmarks.js).
+// blocked by CSP, so we catch <img> load/error in the capture phase (see
+// wireFaviconFallback below).
 const faviconFail = new Map(); // favicon URL -> consecutive failure count
 const FAVICON_MAX_STRIKES = 3;
 function faviconBlocked(url) { return (faviconFail.get(url) || 0) >= FAVICON_MAX_STRIKES; }
 function faviconStrike(url) { if (url) faviconFail.set(url, (faviconFail.get(url) || 0) + 1); }
 function faviconOk(url) { if (url) faviconFail.delete(url); }
+
+// The favicon URL to show, or null when it's missing / has failed too often.
+function pickFavicon(url) { return url && !faviconBlocked(url) ? url : null; }
+// Build the <img> for a site favicon: escaped src plus the data-fav the
+// load/error handler reads. `draggable:false` for bookmark chips, whose parent
+// chip is the drag handle (the icon must not start its own image drag).
+function faviconImg(url, { draggable = true } = {}) {
+  const drag = draggable ? '' : ' draggable="false"';
+  return `<img class="favicon"${drag} src="${encodeURI(url)}" data-fav="${url.replace(/"/g, '%22')}" />`;
+}
+// Wire a container (capture phase) so its favicon <img>s fall back to
+// `fallbackHtml` in the nearest `slotSelector` on error, and clear the strike on
+// success. The slot's _html cache is reset too so the diffed tab dot re-swaps.
+function wireFaviconFallback(container, slotSelector, fallbackHtml) {
+  container.addEventListener('error', (e) => {
+    const img = e.target;
+    if (!img || img.tagName !== 'IMG') return;
+    faviconStrike(img.dataset.fav);
+    const slot = img.closest(slotSelector);
+    if (slot) { slot._html = fallbackHtml; slot.innerHTML = fallbackHtml; }
+  }, true);
+  container.addEventListener('load', (e) => {
+    const img = e.target;
+    if (img && img.tagName === 'IMG') faviconOk(img.dataset.fav);
+  }, true);
+}
 
 // ---- tiny DOM-diff helpers ------------------------------------------------
 function setText(node, v) { if (node.textContent !== v) node.textContent = v; }
